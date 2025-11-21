@@ -1,0 +1,7 @@
+2025-11-21 17:35:03,149___ERROR___DatabaseInterface.SQLiteDatabaseInterfaceReader.__SetConnection: Ошибка создания подключения к БД SQLite!
+2025-11-21 17:35:03,150___ERROR___DatabaseInterface.SQLiteDatabaseInterfaceReader.__SetConnection: Ошибка создания подключения к БД SQLite!
+2025-11-21 17:35:03,151___ERROR___ChromiumBookmarks: Ошибка парсинга закладок: unsupported operand type(s) for /: 'str' and 'int'
+2025-11-21 17:35:03,152___ERROR___DatabaseInterface.SQLiteDatabaseInterfaceReader.__SetConnection: Ошибка создания подключения к БД SQLite!
+2025-11-21 17:35:03,152___INFO___ChromiumHistory: Найден браузер: Google Chrome
+2025-11-21 17:35:03,185___INFO___ChromiumCookies: Найден браузер: Google Chrome
+2025-11-21 17:35:03,195___INFO___ChromiumDownloads: Найден браузер: Google Chrome

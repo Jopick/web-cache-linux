@@ -531,27 +531,39 @@ class _AbstractLocalDatabaseClass(_AbstractDatabaseClass):
     
     def _CheckCreateFolders(self) -> NoReturn:
         # Функция для создания нужных подкаталогов, чтобы можно было создать БД
+         #db_path = self._dbPath.replace('\\', '/')
+        #itemsList = db_path.split('/')
+        #db_path = self._dbPath.replace('\\', '/')
+        #itemsList = db_path.split('/')
+
+        if not self._dbPath:
+            return
         
-        itemsList = self._dbPath.rsplit('\\',2)
-        cases = itemsList[0]
-        case = itemsList[1]
+        # Для Linux - просто создаем папку для файла БД
+        db_dir = os.path.dirname(self._dbPath)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+
+        #itemsList = self._dbPath.rsplit('\\',2)
+        #cases = itemsList[0]
+        #case = itemsList[1]
 
         # Проверяем последовательно каталоги
-        if cases.find(':\\') == -1:
-            cwdCases = os.path.join(self._cwd,cases)
-            if not os.path.exists(cwdCases):                    
-                os.mkdir(cwdCases)
-            cwdCasesCase = os.path.join(cwdCases,case)
-            if not os.path.exists(cwdCasesCase):                    
-                os.mkdir(cwdCasesCase)
+        #if cases.find(':\\') == -1:
+        #    cwdCases = os.path.join(self._cwd,cases)
+        #    if not os.path.exists(cwdCases):                    
+        #        os.mkdir(cwdCases)
+        #    cwdCasesCase = os.path.join(cwdCases,case)
+        #    if not os.path.exists(cwdCasesCase):                    
+        #        os.mkdir(cwdCasesCase)
             
-        else:
-            cwdCases = cases
-            if not os.path.exists(cwdCases):                    
-                os.mkdir(cwdCases)
-            cwdCasesCase = os.path.join(cwdCases,case)
-            if not os.path.exists(cwdCasesCase):                    
-                os.mkdir(cwdCasesCase)
+        #else:
+        #    cwdCases = cases
+        #    if not os.path.exists(cwdCases):                    
+        #        os.mkdir(cwdCases)
+        #    cwdCasesCase = os.path.join(cwdCases,case)
+        #    if not os.path.exists(cwdCasesCase):                    
+        #        os.mkdir(cwdCasesCase)
 
 #----------------------------------------------------------------
 # Интерфейс для работы с имеющимися SQLite

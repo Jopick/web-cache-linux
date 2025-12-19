@@ -79,9 +79,23 @@ class Parser():
             cursor.execute(query)
             
             for row in cursor.fetchall():
-                (download_id, target_path, tab_url, tab_referrer_url, start_time,
-                 end_time, received_bytes, total_bytes, state, danger_type,
-                 interrupt_reason, opened, last_access_time) = row
+                if len(row) < 13:  # Если данных меньше ожидаемых
+                    continue  # Пропускаем эту строку
+        
+                # Извлекаем значения с преобразованием типов
+                download_id = int(row[0]) if row[0] is not None else 0
+                target_path = str(row[1]) if row[1] is not None else ''
+                tab_url = str(row[2]) if row[2] is not None else ''
+                tab_referrer_url = str(row[3]) if row[3] is not None else ''
+                start_time = int(row[4]) if row[4] is not None else 0
+                end_time = int(row[5]) if row[5] is not None else 0
+                received_bytes = int(row[6]) if row[6] is not None else 0
+                total_bytes = int(row[7]) if row[7] is not None else 0
+                state = int(row[8]) if row[8] is not None else 0
+                danger_type = int(row[9]) if row[9] is not None else 0
+                interrupt_reason = int(row[10]) if row[10] is not None else 0
+                opened = int(row[11]) if row[11] is not None else 0
+                last_access_time = int(row[12]) if row[12] is not None else 0
                 
                 # Конвертируем временные метки
                 start_date = self._convert_chrome_time(start_time)

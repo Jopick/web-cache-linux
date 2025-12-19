@@ -79,9 +79,26 @@ class Parser():
             cursor.execute(query)
             
             for row in cursor.fetchall():
-                (download_id, target_path, tab_url, tab_referrer_url, start_time,
-                 end_time, received_bytes, total_bytes, state, danger_type,
-                 interrupt_reason, opened, last_access_time) = row
+                try:
+                    (download_id, target_path, tab_url, tab_referrer_url, start_time,
+                    end_time, received_bytes, total_bytes, state, danger_type,
+                    interrupt_reason, opened, last_access_time) = (
+                        row[0] if len(row) > 0 else 0,
+                        row[1] if len(row) > 1 else '',
+                        row[2] if len(row) > 2 else '',
+                        row[3] if len(row) > 3 else '',
+                        row[4] if len(row) > 4 else 0,
+                        row[5] if len(row) > 5 else 0,
+                        row[6] if len(row) > 6 else 0,
+                        row[7] if len(row) > 7 else 0,
+                        row[8] if len(row) > 8 else 0,
+                        row[9] if len(row) > 9 else 0,
+                        row[10] if len(row) > 10 else 0,
+                        row[11] if len(row) > 11 else 0,
+                        row[12] if len(row) > 12 else 0
+                    )
+                except IndexError:
+                    continue
                 
                 # Конвертируем временные метки
                 start_date = self._convert_chrome_time(start_time)

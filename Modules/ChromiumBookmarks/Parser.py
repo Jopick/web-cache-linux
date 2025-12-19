@@ -11,69 +11,36 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from Common.time_utils import convert_chrome_time
 from Interfaces.time import _format_file_size
 
-class Parser():
-    def __init__(self, parameters: dict):  
-        self.__parameters = parameters
-        
-    #def _convert_chrome_time(self, chrome_timestamp) -> str:
-    #    """Конвертирует Chromium timestamp в читаемую дату"""
-    #    if not chrome_timestamp or chrome_timestamp == 0 or chrome_timestamp == '0':
-    #        return ''
-    #        
-    #    try:
-    #        # В закладках время хранится как СТРОКА, конвертируем в int
-    #        if isinstance(chrome_timestamp, str):
-    #            chrome_timestamp = int(chrome_timestamp)
-    #        
-    #        # Chromium время: микросекунды с 1601-01-01
-    #        unix_timestamp = (chrome_timestamp / 1000000) - 11644473600
-    #        dt = datetime.fromtimestamp(unix_timestamp)
-    #        return dt.strftime('%Y.%m.%d %H:%M:%S')
-    #    except (ValueError, OSError, OverflowError, TypeError) as e:
-     #       print(f"Ошибка конвертации времени {chrome_timestamp}: {e}")
-     #       return 'Ошибка конвертации'
 
-    def _parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
-        """Парсинг закладок браузера - исправленная версия"""
-        results = []
-        
-        if not os.path.exists(bookmarks_path):
-            print(f"Файл закладок не найден: {bookmarks_path}")
-            return results
+class BookmarksTimeConverter:
+    """Класс для конвертации временных меток из закладок"""
+    
+    @staticmethod
+    def _convert_chrome_time(chrome_timestamp) -> str:
+        """Конвертирует Chromium timestamp в читаемую дату"""
+        if not chrome_timestamp or chrome_timestamp == 0 or chrome_timestamp == '0':
+            return ''
             
         try:
-            with open(bookmarks_path, 'r', encoding='utf-8') as f:
-                bookmarks_data = json.load(f)
+            # В закладках время хранится как СТРОКА, конвертируем в int
+            if isinstance(chrome_timestamp, str):
+                chrome_timestamp = int(chrome_timestamp)
             
-            print(f"Успешно загружен JSON из {bookmarks_path}")
-            
-            # Парсим корневые элементы
-            roots = bookmarks_data.get('roots', {})
-            print(f"Найдено корневых элементов: {list(roots.keys())}")
-            
-            # Обрабатываем все корневые папки
-            for root_name, root_node in roots.items():
-                if root_node:
-                    folder_name = {
-                        'bookmark_bar': 'Панель закладок',
-                        'other': 'Другие закладки', 
-                        'synced': 'Синхронизированные'
-                    }.get(root_name, root_name)
-                    
-                    # Рекурсивно обрабатываем все вложенные элементы
-                    bookmarks_in_folder = self._process_bookmark_node(root_node, folder_name, browser_name, bookmarks_path)
-                    results.extend(bookmarks_in_folder)
-                    print(f"В папке '{folder_name}' найдено закладок: {len(bookmarks_in_folder)}")
-            
-            print(f"Всего найдено закладок: {len(results)}")
-                    
-        except Exception as e:
-            print(f"Ошибка парсинга закладок: {e}")
-            import traceback
-            traceback.print_exc()
-                
-        return results
+            # Chromium время: микросекунды с 1601-01-01
+            unix_timestamp = (chrome_timestamp / 1000000) - 11644473600
+            dt = datetime.fromtimestamp(unix_timestamp)
+            return dt.strftime('%Y.%m.%d %H:%M:%S')
+        except (ValueError, OSError, OverflowError, TypeError) as e:
+            print(f"Ошибка конвертации времени {chrome_timestamp}: {e}")
+            return 'Ошибка конвертации'
 
+
+class BookmarksNodeProcessor:
+    """Класс для обработки узлов закладок"""
+    
+    def __init__(self, time_converter):
+        self._time_converter = time_converter
+    
     def _process_bookmark_node(self, node: dict, current_path: str, browser_name: str, data_source: str) -> List[Tuple]:
         """Обрабатывает узел закладки (рекурсивно)"""
         results = []
@@ -103,9 +70,9 @@ class Parser():
                     node.get('name', 'Без имени'),
                     node.get('url', ''),
                     date_added,
-                    self._convert_chrome_time(date_added),
+                    self._time_converter._convert_chrome_time(date_added),
                     date_modified,
-                    self._convert_chrome_time(date_modified),
+                    self._time_converter._convert_chrome_time(date_modified),
                     data_source
                 )
                 results.append(bookmark)
@@ -125,11 +92,65 @@ class Parser():
                 
         return results
 
-    async def Start(self) -> Dict:
-        print("=== BOOKMARKS PARSER ЗАПУЩЕН ===")
+
+class BookmarksParser:
+    """Класс для парсинга файлов закладок"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+        self._time_converter = BookmarksTimeConverter()
+        self._node_processor = BookmarksNodeProcessor(self._time_converter)
+    
+    def _parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
+        """Парсинг закладок браузера - исправленная версия"""
+        results = []
         
-        output_writer = self.__parameters.get('OUTPUTWRITER')
-        
+        if not os.path.exists(bookmarks_path):
+            print(f"Файл закладок не найден: {bookmarks_path}")
+            return results
+            
+        try:
+            with open(bookmarks_path, 'r', encoding='utf-8') as f:
+                bookmarks_data = json.load(f)
+            
+            print(f"Успешно загружен JSON из {bookmarks_path}")
+            
+            # Парсим корневые элементы
+            roots = bookmarks_data.get('roots', {})
+            print(f"Найдено корневых элементов: {list(roots.keys())}")
+            
+            # Обрабатываем все корневые папки
+            for root_name, root_node in roots.items():
+                if root_node:
+                    folder_name = {
+                        'bookmark_bar': 'Панель закладок',
+                        'other': 'Другие закладки', 
+                        'synced': 'Синхронизированные'
+                    }.get(root_name, root_name)
+                    
+                    # Рекурсивно обрабатываем все вложенные элементы
+                    bookmarks_in_folder = self._node_processor._process_bookmark_node(root_node, folder_name, browser_name, bookmarks_path)
+                    results.extend(bookmarks_in_folder)
+                    print(f"В папке '{folder_name}' найдено закладок: {len(bookmarks_in_folder)}")
+            
+            print(f"Всего найдено закладок: {len(results)}")
+                    
+        except Exception as e:
+            print(f"Ошибка парсинга закладок: {e}")
+            import traceback
+            traceback.print_exc()
+                
+        return results
+
+
+class BookmarksOutputConfigurator:
+    """Класс для настройки вывода данных закладок"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+    
+    def _configure_output(self, output_writer):
+        """Настраивает поля и структуру вывода"""
         # Структура полей для БД
         record_fields = {
             'UserName': 'TEXT',
@@ -157,26 +178,58 @@ class Parser():
             'DataSource': ('Источник данных', 200, 'string', 'Путь к файлу закладок')
         }
         
-        # Настройка вывода
         output_writer.SetFields(fields_description, record_fields)
         output_writer.CreateDatabaseTables()
+
+
+class BookmarksBrowserFinder:
+    """Класс для поиска браузеров с закладками"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+    
+    def _find_browsers_bookmarks(self, bookmarks_parser: BookmarksParser) -> List[Tuple]:
+        """Поиск браузеров и сбор данных закладок"""
+        print("=== BOOKMARKS PARSER ЗАПУЩЕН ===")
         
         # Тестовый парсинг
         bookmarks_path = os.path.expanduser('~/.config/google-chrome/Default/Bookmarks')
         
         if os.path.exists(bookmarks_path):
-            records = self._parse_chrome_bookmarks(bookmarks_path, 'Google Chrome')
+            records = bookmarks_parser._parse_chrome_bookmarks(bookmarks_path, 'Google Chrome')
             print(f"Итоговое количество закладок: {len(records)}")
-            
-            # Запись результатов
-            for record in records:
-                output_writer.WriteRecord(record)
             
             # Покажем первые 5 закладок
             for i, record in enumerate(records[:5]):
                 print(f"{i+1}. [{record[2]}] {record[3]} - {record[4]}")
         else:
             print("Файл закладок не найден")
+            records = []
+        
+        return records
+
+
+class Parser:
+    """Основной класс-координатор для парсинга закладок"""
+    
+    def __init__(self, parameters: dict):  
+        self.__parameters = parameters
+        self._bookmarks_parser = BookmarksParser(parameters)
+        self._output_configurator = BookmarksOutputConfigurator(parameters)
+        self._browser_finder = BookmarksBrowserFinder(parameters)
+    
+    async def Start(self) -> Dict:
+        output_writer = self.__parameters.get('OUTPUTWRITER')
+        
+        # Настройка вывода
+        self._output_configurator._configure_output(output_writer)
+        
+        # Поиск браузеров и сбор данных закладок
+        records = self._browser_finder._find_browsers_bookmarks(self._bookmarks_parser)
+        
+        # Запись результатов
+        for record in records:
+            output_writer.WriteRecord(record)
         
         # Завершение работы
         output_writer.RemoveTempTables()

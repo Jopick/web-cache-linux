@@ -89,9 +89,26 @@ class Parser():
             cursor.execute(query)
             
             for row in cursor.fetchall():
-                (creation_utc, host_key, name, value, encrypted_value, path, 
-                 expires_utc, is_secure, is_httponly, last_access_utc, 
-                 has_expires, is_persistent, priority, samesite, last_update_utc) = row
+                try:
+                    # Безопасное извлечение по индексам
+                    creation_utc = row[0] if len(row) > 0 else 0
+                    host_key = row[1] if len(row) > 1 else ''
+                    name = row[2] if len(row) > 2 else ''
+                    value = row[3] if len(row) > 3 else ''
+                    encrypted_value = row[4] if len(row) > 4 else b''
+                    path = row[5] if len(row) > 5 else ''
+                    expires_utc = row[6] if len(row) > 6 else 0
+                    is_secure = row[7] if len(row) > 7 else 0
+                    is_httponly = row[8] if len(row) > 8 else 0
+                    last_access_utc = row[9] if len(row) > 9 else 0
+                    has_expires = row[10] if len(row) > 10 else 0
+                    is_persistent = row[11] if len(row) > 11 else 0
+                    priority = row[12] if len(row) > 12 else 0
+                    samesite = row[13] if len(row) > 13 else 0
+                    last_update_utc = row[14] if len(row) > 14 else 0
+        
+                except IndexError:
+                    continue
                 
                 # Определяем фактическое значение cookie
                 cookie_value = value if value else self._decrypt_cookie_value(encrypted_value)

@@ -79,26 +79,23 @@ class Parser():
             cursor.execute(query)
             
             for row in cursor.fetchall():
-                try:
-                    (download_id, target_path, tab_url, tab_referrer_url, start_time,
-                    end_time, received_bytes, total_bytes, state, danger_type,
-                    interrupt_reason, opened, last_access_time) = (
-                        row[0] if len(row) > 0 else 0,
-                        row[1] if len(row) > 1 else '',
-                        row[2] if len(row) > 2 else '',
-                        row[3] if len(row) > 3 else '',
-                        row[4] if len(row) > 4 else 0,
-                        row[5] if len(row) > 5 else 0,
-                        row[6] if len(row) > 6 else 0,
-                        row[7] if len(row) > 7 else 0,
-                        row[8] if len(row) > 8 else 0,
-                        row[9] if len(row) > 9 else 0,
-                        row[10] if len(row) > 10 else 0,
-                        row[11] if len(row) > 11 else 0,
-                        row[12] if len(row) > 12 else 0
-                    )
-                except IndexError:
-                    continue
+                if len(row) < 13:  # Если данных меньше ожидаемых
+                    continue  # Пропускаем эту строку
+        
+                # Извлекаем значения с преобразованием типов
+                download_id = int(row[0]) if row[0] is not None else 0
+                target_path = str(row[1]) if row[1] is not None else ''
+                tab_url = str(row[2]) if row[2] is not None else ''
+                tab_referrer_url = str(row[3]) if row[3] is not None else ''
+                start_time = int(row[4]) if row[4] is not None else 0
+                end_time = int(row[5]) if row[5] is not None else 0
+                received_bytes = int(row[6]) if row[6] is not None else 0
+                total_bytes = int(row[7]) if row[7] is not None else 0
+                state = int(row[8]) if row[8] is not None else 0
+                danger_type = int(row[9]) if row[9] is not None else 0
+                interrupt_reason = int(row[10]) if row[10] is not None else 0
+                opened = int(row[11]) if row[11] is not None else 0
+                last_access_time = int(row[12]) if row[12] is not None else 0
                 
                 # Конвертируем временные метки
                 start_date = self._convert_chrome_time(start_time)

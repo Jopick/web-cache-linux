@@ -6,11 +6,12 @@ import os, sqlite3, shutil
 from typing import Dict, List, Tuple
 from datetime import datetime
 
-class Parser():
-    def __init__(self, parameters: dict):  
-        self.__parameters = parameters
-        
-    def _convert_chrome_time(self, chrome_timestamp: int) -> str:
+
+class TimeConverter:
+    """Класс для конвертации временных меток"""
+    
+    @staticmethod
+    def _convert_chrome_time(chrome_timestamp: int) -> str:
         """Конвертирует Chromium timestamp в читаемую дату"""
         if not chrome_timestamp or chrome_timestamp == 0:
             return ''
@@ -23,7 +24,12 @@ class Parser():
         except (ValueError, OSError, OverflowError):
             return 'Ошибка конвертации'
 
-    def _format_file_size(self, bytes_size: int) -> str:
+
+class FileSizeFormatter:
+    """Класс для форматирования размеров файлов"""
+    
+    @staticmethod
+    def _format_file_size(bytes_size: int) -> str:
         """Форматирует размер файла в читаемый вид"""
         if not bytes_size:
             return "0 B"
@@ -34,6 +40,15 @@ class Parser():
             bytes_size /= 1024.0
         return f"{bytes_size:.1f} TB"
 
+
+class DownloadsParser:
+    """Класс для парсинга истории загрузок"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+        self._time_converter = TimeConverter()
+        self._size_formatter = FileSizeFormatter()
+    
     def _parse_chrome_downloads(self, history_path: str, browser_name: str) -> List[Tuple]:
         """Парсинг истории загрузок браузера"""
         results = []
@@ -98,9 +113,9 @@ class Parser():
                 last_access_time = int(row[12]) if row[12] is not None else 0
                 
                 # Конвертируем временные метки
-                start_date = self._convert_chrome_time(start_time)
-                end_date = self._convert_chrome_time(end_time)
-                last_access_date = self._convert_chrome_time(last_access_time)
+                start_date = self._time_converter._convert_chrome_time(start_time)
+                end_date = self._time_converter._convert_chrome_time(end_time)
+                last_access_date = self._time_converter._convert_chrome_time(last_access_time)
                 
                 # Определяем статус загрузки
                 state_map = {
@@ -122,8 +137,8 @@ class Parser():
                 danger_level = danger_map.get(danger_type, "Неизвестно")
                 
                 # Форматируем размеры файлов
-                received_size = self._format_file_size(received_bytes)
-                total_size = self._format_file_size(total_bytes)
+                received_size = self._size_formatter._format_file_size(received_bytes)
+                total_size = self._size_formatter._format_file_size(total_bytes)
                 
                 # Вычисляем прогресс загрузки
                 progress = 0
@@ -165,13 +180,15 @@ class Parser():
                 
         return results
 
-    async def Start(self) -> Dict:
-        storage = self.__parameters.get('STORAGE')
-        output_writer = self.__parameters.get('OUTPUTWRITER')
-        
-        if not self.__parameters.get('DBCONNECTION').IsConnected():
-            return {}
-        
+
+class OutputConfigurator:
+    """Класс для настройки вывода данных"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+    
+    def _configure_output(self, output_writer):
+        """Настраивает поля и структуру вывода"""
         # Структура полей для БД
         record_fields = {
             'UserName': 'TEXT',
@@ -218,30 +235,18 @@ class Parser():
             'DataSource': ('Источник данных', 200, 'string', 'Путь к файлу истории')
         }
         
-        HELP_TEXT = """
-Chromium Downloads Parser:
-История загрузок браузеров на базе Chromium
-
-Извлекается из таблицы downloads файлов:
-~/.config/google-chrome/Default/History
-~/.config/chromium/Default/History
-
-Данные включают:
-- Пути к скачанным файлам
-- URL источников загрузок
-- Размеры файлов и прогресс загрузки
-- Статусы загрузок (завершена, отменена, в процессе)
-- Уровни опасности файлов
-- Временные метки начала и завершения
-"""
-        
-        # Настройка вывода
         output_writer.SetFields(fields_description, record_fields)
         output_writer.CreateDatabaseTables()
-        
-        await self.__parameters.get('UIREDRAW')('Поиск браузеров Chromium...', 10)
-        
-        # Поиск браузеров
+
+
+class BrowserFinder:
+    """Класс для поиска браузеров"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+    
+    async def _find_browsers(self, downloads_parser: DownloadsParser) -> List[Tuple]:
+        """Поиск браузеров и сбор данных"""
         browsers = [
             ('google-chrome', 'Google Chrome'),
             ('chromium', 'Chromium'),
@@ -266,9 +271,53 @@ Chromium Downloads Parser:
             
             if os.path.exists(history_path):
                 self.__parameters.get('LOG').Info('ChromiumDownloads', f'Найден браузер: {browser_name}')
-                records = self._parse_chrome_downloads(history_path, browser_name)
+                records = downloads_parser._parse_chrome_downloads(history_path, browser_name)
                 all_records.extend(records)
                 print(f"Найдено загрузок в {browser_name}: {len(records)}")
+        
+        return all_records
+
+
+class Parser:
+    """Основной класс-координатор"""
+    
+    def __init__(self, parameters: dict):  
+        self.__parameters = parameters
+        self._downloads_parser = DownloadsParser(parameters)
+        self._output_configurator = OutputConfigurator(parameters)
+        self._browser_finder = BrowserFinder(parameters)
+    
+    async def Start(self) -> Dict:
+        storage = self.__parameters.get('STORAGE')
+        output_writer = self.__parameters.get('OUTPUTWRITER')
+        
+        if not self.__parameters.get('DBCONNECTION').IsConnected():
+            return {}
+        
+        HELP_TEXT = """
+Chromium Downloads Parser:
+История загрузок браузеров на базе Chromium
+
+Извлекается из таблицы downloads файлов:
+~/.config/google-chrome/Default/History
+~/.config/chromium/Default/History
+
+Данные включают:
+- Пути к скачанным файлам
+- URL источников загрузок
+- Размеры файлов и прогресс загрузки
+- Статусы загрузок (завершена, отменена, в процессе)
+- Уровни опасности файлов
+- Временные метки начала и завершения
+"""
+        
+        # Настройка вывода
+        self._output_configurator._configure_output(output_writer)
+        
+        await self.__parameters.get('UIREDRAW')('Поиск браузеров Chromium...', 10)
+        
+        # Поиск браузеров и сбор данных
+        all_records = await self._browser_finder._find_browsers(self._downloads_parser)
         
         # Запись результатов
         await self.__parameters.get('UIREDRAW')('Запись результатов...', 80)

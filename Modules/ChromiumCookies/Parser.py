@@ -136,6 +136,7 @@ class Parser():
             
             for row in cursor.fetchall():
                 try:
+
                     # Распаковываем значения
                     row_dict = dict(zip([f.split(' as ')[-1] for f in select_fields], row))
                     
@@ -201,6 +202,7 @@ class Parser():
                     continue  # Пропускаем некорректные записи
             
             self.__parameters.get('LOG').Info('ChromiumCookies', f'Найдено записей в {browser_name}: {len(results)}')
+
                 
         except Exception as e:
             self.__parameters.get('LOG').Warn('ChromiumCookies', f'Ошибка парсинга: {str(e)}')

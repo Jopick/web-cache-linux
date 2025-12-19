@@ -2,11 +2,14 @@
 """
 Модуль обработки истории браузера Chromium
 """
+
 import os
 import sqlite3
 import shutil
 from typing import Dict, List, Tuple
 from datetime import datetime
+from abc import ABC, abstractmethod
+
 
 
 class Parser:
@@ -27,12 +30,55 @@ class Parser:
         except (ValueError, OSError, OverflowError):
             return ''
 
-    def _parse_chrome_history(self, history_path: str, browser_name: str) -> List[Tuple]:
+
+class DatabaseManager:
+    """Класс для управления подключением к базе данных"""
+    
+    def __init__(self, temp_dir: str, history_path: str):
+        self.temp_dir = temp_dir
+        self.history_path = history_path
+        self.temp_path: Optional[str] = None
+        self.conn: Optional[sqlite3.Connection] = None
+        
+    def __enter__(self):
+        """Создание временной копии и подключение к БД"""
+        self.temp_path = os.path.join(
+            self.temp_dir, 
+            f'temp_history_{os.path.basename(self.history_path)}'
+        )
+        shutil.copy2(self.history_path, self.temp_path)
+        self.conn = sqlite3.connect(self.temp_path)
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Закрытие соединения и удаление временного файла"""
+        if self.conn:
+            self.conn.close()
+        if self.temp_path and os.path.exists(self.temp_path):
+            os.remove(self.temp_path)
+            
+    def get_cursor(self) -> sqlite3.Cursor:
+        """Получение курсора базы данных"""
+        if self.conn:
+            return self.conn.cursor()
+        raise sqlite3.Error("Нет подключения к базе данных")
+
+
+class HistoryParser:
+    """Класс для парсинга истории посещений"""
+    
+    def __init__(self, logger, username: str = 'Unknown'):
+        self.logger = logger
+        self.username = username
+        self.time_converter = TimeConverter()
+        
+    def parse_history(self, history_path: str, browser_name: str) -> List[Tuple]:
         """Парсинг истории браузера"""
         results = []
 
         if not os.path.exists(history_path):
             return results
+
 
         # Создаем временную копию для избежания блокировки
         temp_dir = self.__parameters.get('TEMP')
@@ -82,9 +128,11 @@ class Parser:
                 )
                 results.append(record)
 
+
         except sqlite3.Error as e:
-            self.__parameters.get('LOG').Warn('ChromiumHistory', f'Ошибка парсинга: {e}')
+            self.logger.Warn('ChromiumHistory', f'Ошибка парсинга: {e}')
         except Exception as e:
+
             self.__parameters.get('LOG').Error('ChromiumHistory', f'Критическая ошибка: {e}')
         finally:
             if 'conn' in locals():
@@ -102,6 +150,7 @@ class Parser:
 
         # Структура полей для БД
         record_fields = {
+
             'UserName': 'TEXT',
             'Browser': 'TEXT',
             'URL': 'TEXT',
@@ -112,6 +161,7 @@ class Parser:
             'VisitDate': 'TEXT',
             'DataSource': 'TEXT'
         }
+
 
         # Описание полей для интерфейса
         fields_description = {
@@ -125,6 +175,7 @@ class Parser:
             'VisitDate': ('Дата посещения', 180, 'string', 'Дата и время посещения'),
             'DataSource': ('Источник данных', 200, 'string', 'Путь к файлу истории')
         }
+
 
         HELP_TEXT = """
 Chromium History Parser:
@@ -141,13 +192,18 @@ Chromium History Parser:
 - Время последнего посещения
 """
 
+
         # Настройка вывода
-        output_writer.SetFields(fields_description, record_fields)
+        output_writer.SetFields(
+            self.output_config.get_fields_description(),
+            self.output_config.get_record_fields()
+        )
         output_writer.CreateDatabaseTables()
 
         await self.__parameters.get('UIREDRAW')('Поиск браузеров Chromium...', 10)
 
         # Поиск браузеров
+
         browsers = [
             ('google-chrome', 'Google Chrome'),
             ('chromium', 'Chromium'),
@@ -190,7 +246,7 @@ Chromium History Parser:
 
         info_data = {
             'Name': self.__parameters.get('MODULENAME'),
-            'Help': HELP_TEXT,
+            'Help': self.output_config.get_help_text(),
             'Timestamp': self.__parameters.get('CASENAME'),
             'Vendor': 'LabFramework',
             'RecordsProcessed': str(len(all_records))

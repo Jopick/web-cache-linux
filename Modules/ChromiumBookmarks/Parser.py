@@ -9,98 +9,11 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from Common.time_utils import convert_chrome_time
-from Interfaces.time import _format_file_size
 
-
-class BookmarksTimeConverter:
-    """Класс для конвертации временных меток из закладок"""
-    
-    @staticmethod
-    def _convert_chrome_time(chrome_timestamp) -> str:
-        """Конвертирует Chromium timestamp в читаемую дату"""
-        if not chrome_timestamp or chrome_timestamp == 0 or chrome_timestamp == '0':
-            return ''
-            
-        try:
-            # В закладках время хранится как СТРОКА, конвертируем в int
-            if isinstance(chrome_timestamp, str):
-                chrome_timestamp = int(chrome_timestamp)
-            
-            # Chromium время: микросекунды с 1601-01-01
-            unix_timestamp = (chrome_timestamp / 1000000) - 11644473600
-            dt = datetime.fromtimestamp(unix_timestamp)
-            return dt.strftime('%Y.%m.%d %H:%M:%S')
-        except (ValueError, OSError, OverflowError, TypeError) as e:
-            print(f"Ошибка конвертации времени {chrome_timestamp}: {e}")
-            return 'Ошибка конвертации'
-
-
-class BookmarksNodeProcessor:
-    """Класс для обработки узлов закладок"""
-    
-    def __init__(self, time_converter):
-        self._time_converter = time_converter
-    
-    def _process_bookmark_node(self, node: dict, current_path: str, browser_name: str, data_source: str) -> List[Tuple]:
-        """Обрабатывает узел закладки (рекурсивно)"""
-        results = []
-        
-        if not node:
-            return results
-            
-        node_type = node.get('type')
-        
-        if node_type == 'url':
-            # Это закладка - добавляем в результаты
-            try:
-                # Конвертируем время (оно может быть строкой!)
-                date_added = node.get('date_added', 0)
-                date_modified = node.get('date_modified', 0)
-                
-                # Если время строка - конвертируем в int
-                if isinstance(date_added, str):
-                    date_added = int(date_added) if date_added and date_added != '0' else 0
-                if isinstance(date_modified, str):
-                    date_modified = int(date_modified) if date_modified and date_modified != '0' else 0
-                
-                bookmark = (
-                    'ivan',  # временно фиксированное имя
-                    browser_name,
-                    current_path,
-                    node.get('name', 'Без имени'),
-                    node.get('url', ''),
-                    date_added,
-                    self._time_converter._convert_chrome_time(date_added),
-                    date_modified,
-                    self._time_converter._convert_chrome_time(date_modified),
-                    data_source
-                )
-                results.append(bookmark)
-                print(f"Добавлена закладка: {node.get('name')}")
-                
-            except Exception as e:
-                print(f"Ошибка обработки закладки {node.get('name')}: {e}")
-                
-        elif node_type == 'folder':
-            # Это папка - обрабатываем детей рекурсивно
-            folder_name = node.get('name', 'Без имени')
-            new_path = f"{current_path}/{folder_name}"
-            
-            for child in node.get('children', []):
-                child_results = self._process_bookmark_node(child, new_path, browser_name, data_source)
-                results.extend(child_results)
-                
-        return results
-
-
-class BookmarksParser:
-    """Класс для парсинга файлов закладок"""
-    
-    def __init__(self, parameters: dict):
+class Parser():
+    def __init__(self, parameters: dict):  
         self.__parameters = parameters
-        self._time_converter = BookmarksTimeConverter()
-        self._node_processor = BookmarksNodeProcessor(self._time_converter)
-    
+        
     def _parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
         """Парсинг закладок браузера - исправленная версия"""
         results = []
@@ -129,7 +42,7 @@ class BookmarksParser:
                     }.get(root_name, root_name)
                     
                     # Рекурсивно обрабатываем все вложенные элементы
-                    bookmarks_in_folder = self._node_processor._process_bookmark_node(root_node, folder_name, browser_name, bookmarks_path)
+                    bookmarks_in_folder = self._process_bookmark_node(root_node, folder_name, browser_name, bookmarks_path)
                     results.extend(bookmarks_in_folder)
                     print(f"В папке '{folder_name}' найдено закладок: {len(bookmarks_in_folder)}")
             
@@ -142,15 +55,62 @@ class BookmarksParser:
                 
         return results
 
+    def _process_bookmark_node(self, node: dict, current_path: str, browser_name: str, data_source: str) -> List[Tuple]:
+        """Обрабатывает узел закладки (рекурсивно)"""
+        results = []
+        
+        if not node:
+            return results
+            
+        node_type = node.get('type')
+        
+        if node_type == 'url':
+            # Это закладка - добавляем в результаты
+            try:
+                # Конвертируем время (оно может быть строкой!)
+                date_added = node.get('date_added', 0)
+                date_modified = node.get('date_modified', 0)
+                
+                # Если время строка - конвертируем в int
+                if isinstance(date_added, str):
+                    date_added = int(date_added) if date_added and date_added != '0' else 0
+                if isinstance(date_modified, str):
+                    date_modified = int(date_modified) if date_modified and date_modified != '0' else 0
+                
+                bookmark = (
+                    self.__parameters.get('USERNAME', 'Unknown'),  # временно фиксированное имя
+                    browser_name,
+                    current_path,
+                    node.get('name', 'Без имени'),
+                    node.get('url', ''),
+                    date_added,
+                    convert_chrome_time(date_added),  # ИСПРАВЛЕНО: вызываем функцию напрямую
+                    date_modified,
+                    convert_chrome_time(date_modified),  # ИСПРАВЛЕНО: вызываем функцию напрямую
+                    data_source
+                )
+                results.append(bookmark)
+                print(f"Добавлена закладка: {node.get('name')}")
+                
+            except Exception as e:
+                print(f"Ошибка обработки закладки {node.get('name')}: {e}")
+                
+        elif node_type == 'folder':
+            # Это папка - обрабатываем детей рекурсивно
+            folder_name = node.get('name', 'Без имени')
+            new_path = f"{current_path}/{folder_name}"
+            
+            for child in node.get('children', []):
+                child_results = self._process_bookmark_node(child, new_path, browser_name, data_source)
+                results.extend(child_results)
+                
+        return results
 
-class BookmarksOutputConfigurator:
-    """Класс для настройки вывода данных закладок"""
-    
-    def __init__(self, parameters: dict):
-        self.__parameters = parameters
-    
-    def _configure_output(self, output_writer):
-        """Настраивает поля и структуру вывода"""
+    async def Start(self) -> Dict:
+        print("=== BOOKMARKS PARSER ЗАПУЩЕН ===")
+        
+        output_writer = self.__parameters.get('OUTPUTWRITER')
+        
         # Структура полей для БД
         record_fields = {
             'UserName': 'TEXT',
@@ -178,58 +138,26 @@ class BookmarksOutputConfigurator:
             'DataSource': ('Источник данных', 200, 'string', 'Путь к файлу закладок')
         }
         
+        # Настройка вывода
         output_writer.SetFields(fields_description, record_fields)
         output_writer.CreateDatabaseTables()
-
-
-class BookmarksBrowserFinder:
-    """Класс для поиска браузеров с закладками"""
-    
-    def __init__(self, parameters: dict):
-        self.__parameters = parameters
-    
-    def _find_browsers_bookmarks(self, bookmarks_parser: BookmarksParser) -> List[Tuple]:
-        """Поиск браузеров и сбор данных закладок"""
-        print("=== BOOKMARKS PARSER ЗАПУЩЕН ===")
         
         # Тестовый парсинг
         bookmarks_path = os.path.expanduser('~/.config/google-chrome/Default/Bookmarks')
         
         if os.path.exists(bookmarks_path):
-            records = bookmarks_parser._parse_chrome_bookmarks(bookmarks_path, 'Google Chrome')
+            records = self._parse_chrome_bookmarks(bookmarks_path, 'Google Chrome')
             print(f"Итоговое количество закладок: {len(records)}")
+            
+            # Запись результатов
+            for record in records:
+                output_writer.WriteRecord(record)
             
             # Покажем первые 5 закладок
             for i, record in enumerate(records[:5]):
                 print(f"{i+1}. [{record[2]}] {record[3]} - {record[4]}")
         else:
             print("Файл закладок не найден")
-            records = []
-        
-        return records
-
-
-class Parser:
-    """Основной класс-координатор для парсинга закладок"""
-    
-    def __init__(self, parameters: dict):  
-        self.__parameters = parameters
-        self._bookmarks_parser = BookmarksParser(parameters)
-        self._output_configurator = BookmarksOutputConfigurator(parameters)
-        self._browser_finder = BookmarksBrowserFinder(parameters)
-    
-    async def Start(self) -> Dict:
-        output_writer = self.__parameters.get('OUTPUTWRITER')
-        
-        # Настройка вывода
-        self._output_configurator._configure_output(output_writer)
-        
-        # Поиск браузеров и сбор данных закладок
-        records = self._browser_finder._find_browsers_bookmarks(self._bookmarks_parser)
-        
-        # Запись результатов
-        for record in records:
-            output_writer.WriteRecord(record)
         
         # Завершение работы
         output_writer.RemoveTempTables()

@@ -10,52 +10,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from Common.time_utils import convert_chrome_time
 
-class Parser():
-    def __init__(self, parameters: dict):  
+
+class BookmarksProcessor:
+    """Обработчик узлов закладок"""
+    
+    def __init__(self, parameters: dict):
         self.__parameters = parameters
         
-    def _parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
-        """Парсинг закладок браузера - исправленная версия"""
-        results = []
-        
-        if not os.path.exists(bookmarks_path):
-            print(f"Файл закладок не найден: {bookmarks_path}")
-            return results
-            
-        try:
-            with open(bookmarks_path, 'r', encoding='utf-8') as f:
-                bookmarks_data = json.load(f)
-            
-            print(f"Успешно загружен JSON из {bookmarks_path}")
-            
-            # Парсим корневые элементы
-            roots = bookmarks_data.get('roots', {})
-            print(f"Найдено корневых элементов: {list(roots.keys())}")
-            
-            # Обрабатываем все корневые папки
-            for root_name, root_node in roots.items():
-                if root_node:
-                    folder_name = {
-                        'bookmark_bar': 'Панель закладок',
-                        'other': 'Другие закладки', 
-                        'synced': 'Синхронизированные'
-                    }.get(root_name, root_name)
-                    
-                    # Рекурсивно обрабатываем все вложенные элементы
-                    bookmarks_in_folder = self._process_bookmark_node(root_node, folder_name, browser_name, bookmarks_path)
-                    results.extend(bookmarks_in_folder)
-                    print(f"В папке '{folder_name}' найдено закладок: {len(bookmarks_in_folder)}")
-            
-            print(f"Всего найдено закладок: {len(results)}")
-                    
-        except Exception as e:
-            print(f"Ошибка парсинга закладок: {e}")
-            import traceback
-            traceback.print_exc()
-                
-        return results
-
-    def _process_bookmark_node(self, node: dict, current_path: str, browser_name: str, data_source: str) -> List[Tuple]:
+    def process_bookmark_node(self, node: dict, current_path: str, browser_name: str, data_source: str) -> List[Tuple]:
         """Обрабатывает узел закладки (рекурсивно)"""
         results = []
         
@@ -101,10 +63,75 @@ class Parser():
             new_path = f"{current_path}/{folder_name}"
             
             for child in node.get('children', []):
-                child_results = self._process_bookmark_node(child, new_path, browser_name, data_source)
+                child_results = self.process_bookmark_node(child, new_path, browser_name, data_source)
                 results.extend(child_results)
                 
         return results
+
+
+class BookmarksParser:
+    """Парсер файлов закладок"""
+    
+    def __init__(self, bookmarks_processor: BookmarksProcessor):
+        self.bookmarks_processor = bookmarks_processor
+        
+    def parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
+        """Парсинг закладок браузера - исправленная версия"""
+        results = []
+        
+        if not os.path.exists(bookmarks_path):
+            print(f"Файл закладок не найден: {bookmarks_path}")
+            return results
+            
+        try:
+            with open(bookmarks_path, 'r', encoding='utf-8') as f:
+                bookmarks_data = json.load(f)
+            
+            print(f"Успешно загружен JSON из {bookmarks_path}")
+            
+            # Парсим корневые элементы
+            roots = bookmarks_data.get('roots', {})
+            print(f"Найдено корневых элементов: {list(roots.keys())}")
+            
+            # Обрабатываем все корневые папки
+            for root_name, root_node in roots.items():
+                if root_node:
+                    folder_name = {
+                        'bookmark_bar': 'Панель закладок',
+                        'other': 'Другие закладки', 
+                        'synced': 'Синхронизированные'
+                    }.get(root_name, root_name)
+                    
+                    # Рекурсивно обрабатываем все вложенные элементы
+                    bookmarks_in_folder = self.bookmarks_processor.process_bookmark_node(
+                        root_node, folder_name, browser_name, bookmarks_path
+                    )
+                    results.extend(bookmarks_in_folder)
+                    print(f"В папке '{folder_name}' найдено закладок: {len(bookmarks_in_folder)}")
+            
+            print(f"Всего найдено закладок: {len(results)}")
+                    
+        except Exception as e:
+            print(f"Ошибка парсинга закладок: {e}")
+            import traceback
+            traceback.print_exc()
+                
+        return results
+
+
+class Parser:
+    def __init__(self, parameters: dict):  
+        self.__parameters = parameters
+        self.bookmarks_processor = BookmarksProcessor(parameters)
+        self.bookmarks_parser = BookmarksParser(self.bookmarks_processor)
+        
+    def _parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
+        """Парсинг закладок браузера - исправленная версия"""
+        return self.bookmarks_parser.parse_chrome_bookmarks(bookmarks_path, browser_name)
+
+    def _process_bookmark_node(self, node: dict, current_path: str, browser_name: str, data_source: str) -> List[Tuple]:
+        """Обрабатывает узел закладки (рекурсивно)"""
+        return self.bookmarks_processor.process_bookmark_node(node, current_path, browser_name, data_source)
 
     async def Start(self) -> Dict:
         print("=== BOOKMARKS PARSER ЗАПУЩЕН ===")

@@ -69,7 +69,15 @@ class HistoryFileParser:
             cursor.execute(query)
             
             for row in cursor.fetchall():
-                url, title, visit_count, typed_count, last_visit_time = row
+                if len(row) < 5:  # Проверяем, что в строке достаточно данных
+                    continue  # Пропускаем строку с недостающими данными
+    
+                # Извлекаем значения с преобразованием типов
+                url = str(row[0]) if row[0] is not None else ''
+                title = str(row[1]) if row[1] is not None else ''
+                visit_count = int(row[2]) if row[2] is not None else 0
+                typed_count = int(row[3]) if row[3] is not None else 0
+                last_visit_time = int(row[4]) if row[4] is not None else 0
                 
                 # Конвертируем время
                 visit_date = self.time_converter.convert_chrome_time(last_visit_time)

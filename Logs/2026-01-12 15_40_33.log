@@ -1,0 +1,6 @@
+2026-01-12 15:40:33,381___ERROR___DatabaseInterface.SQLiteDatabaseInterfaceReader.__SetConnection: Ошибка создания подключения к БД SQLite!
+2026-01-12 15:40:33,441___ERROR___DatabaseInterface.SQLiteDatabaseInterfaceReader.__SetConnection: Ошибка создания подключения к БД SQLite!
+2026-01-12 15:40:33,479___INFO___ChromiumCookies: Найден браузер: Chromium
+2026-01-12 15:40:33,517___INFO___ChromiumCookies: Найдено записей в Chromium: 46
+2026-01-12 15:40:33,631___INFO___ChromiumDownloads: Найден браузер: Chromium
+2026-01-12 15:40:33,864___INFO___ChromiumHistory: Найден браузер: Chromium

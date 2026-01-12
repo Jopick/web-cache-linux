@@ -9,30 +9,11 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from Common.time_utils import convert_chrome_time
-from Interfaces.time import _format_file_size
 
 class Parser():
     def __init__(self, parameters: dict):  
         self.__parameters = parameters
         
-    #def _convert_chrome_time(self, chrome_timestamp) -> str:
-    #    """Конвертирует Chromium timestamp в читаемую дату"""
-    #    if not chrome_timestamp or chrome_timestamp == 0 or chrome_timestamp == '0':
-    #        return ''
-    #        
-    #    try:
-    #        # В закладках время хранится как СТРОКА, конвертируем в int
-    #        if isinstance(chrome_timestamp, str):
-    #            chrome_timestamp = int(chrome_timestamp)
-    #        
-    #        # Chromium время: микросекунды с 1601-01-01
-    #        unix_timestamp = (chrome_timestamp / 1000000) - 11644473600
-    #        dt = datetime.fromtimestamp(unix_timestamp)
-    #        return dt.strftime('%Y.%m.%d %H:%M:%S')
-    #    except (ValueError, OSError, OverflowError, TypeError) as e:
-     #       print(f"Ошибка конвертации времени {chrome_timestamp}: {e}")
-     #       return 'Ошибка конвертации'
-
     def _parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
         """Парсинг закладок браузера - исправленная версия"""
         results = []
@@ -97,15 +78,15 @@ class Parser():
                     date_modified = int(date_modified) if date_modified and date_modified != '0' else 0
                 
                 bookmark = (
-                    'ivan',  # временно фиксированное имя
+                    self.__parameters.get('USERNAME', 'Unknown'),  # временно фиксированное имя
                     browser_name,
                     current_path,
                     node.get('name', 'Без имени'),
                     node.get('url', ''),
                     date_added,
-                    self._convert_chrome_time(date_added),
+                    convert_chrome_time(date_added),  # ИСПРАВЛЕНО: вызываем функцию напрямую
                     date_modified,
-                    self._convert_chrome_time(date_modified),
+                    convert_chrome_time(date_modified),  # ИСПРАВЛЕНО: вызываем функцию напрямую
                     data_source
                 )
                 results.append(bookmark)

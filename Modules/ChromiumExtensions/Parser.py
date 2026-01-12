@@ -6,11 +6,12 @@ import os, json
 from typing import Dict, List, Tuple
 from datetime import datetime
 
-class Parser():
-    def __init__(self, parameters: dict):  
-        self.__parameters = parameters
-        
-    def _parse_extension_manifest(self, manifest_path: str) -> dict:
+
+class ManifestParser:
+    """Класс для парсинга manifest.json файлов расширений"""
+    
+    @staticmethod
+    def _parse_extension_manifest(manifest_path: str) -> dict:
         """Парсит manifest.json расширения"""
         try:
             with open(manifest_path, 'r', encoding='utf-8') as f:
@@ -19,7 +20,12 @@ class Parser():
             print(f"Ошибка чтения manifest.json {manifest_path}: {e}")
             return {}
 
-    def _safe_string(self, value) -> str:
+
+class StringConverter:
+    """Класс для безопасного преобразования типов данных"""
+    
+    @staticmethod
+    def _safe_string(value) -> str:
         """Безопасно конвертирует значение в строку"""
         if value is None:
             return ''
@@ -28,6 +34,52 @@ class Parser():
         else:
             return str(value)
 
+
+class ExtensionLocalizationHandler:
+    """Класс для обработки локализации названий расширений"""
+    
+    @staticmethod
+    def _get_localized_name(manifest: dict, version_path: str) -> str:
+        """Получает локализованное название расширения"""
+        name = manifest.get('name', '')
+        if name.startswith('__MSG_'):
+            # Локализованное название - берем из default_locale
+            default_locale = manifest.get('default_locale', 'en')
+            locales_path = os.path.join(version_path, '_locales', default_locale, 'messages.json')
+            if os.path.exists(locales_path):
+                try:
+                    with open(locales_path, 'r', encoding='utf-8') as f:
+                        locales = json.load(f)
+                        name_key = name.replace('__MSG_', '').replace('__', '')
+                        if name_key in locales:
+                            name = locales[name_key].get('message', name)
+                except:
+                    pass
+        return name
+
+
+class PermissionsFormatter:
+    """Класс для форматирования прав доступа расширений"""
+    
+    @staticmethod
+    def _format_permissions(permissions) -> str:
+        """Форматирует права доступа в строку"""
+        if isinstance(permissions, list):
+            return ', '.join(permissions)
+        else:
+            return str(permissions)
+
+
+class ExtensionsParser:
+    """Класс для парсинга расширений браузера"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+        self._manifest_parser = ManifestParser()
+        self._string_converter = StringConverter()
+        self._localization_handler = ExtensionLocalizationHandler()
+        self._permissions_formatter = PermissionsFormatter()
+    
     def _parse_chrome_extensions(self, extensions_path: str, browser_name: str) -> List[Tuple]:
         """Парсинг расширений браузера"""
         results = []
@@ -52,31 +104,15 @@ class Parser():
                         
                         if os.path.exists(manifest_path):
                             print(f"  Версия: {version}, manifest: {manifest_path}")
-                            manifest = self._parse_extension_manifest(manifest_path)
+                            manifest = self._manifest_parser._parse_extension_manifest(manifest_path)
                             
                             if manifest:
                                 # Получаем название (может быть в разных полях)
-                                name = manifest.get('name', '')
-                                if name.startswith('__MSG_'):
-                                    # Локализованное название - берем из default_locale
-                                    default_locale = manifest.get('default_locale', 'en')
-                                    locales_path = os.path.join(version_path, '_locales', default_locale, 'messages.json')
-                                    if os.path.exists(locales_path):
-                                        try:
-                                            with open(locales_path, 'r', encoding='utf-8') as f:
-                                                locales = json.load(f)
-                                                name_key = name.replace('__MSG_', '').replace('__', '')
-                                                if name_key in locales:
-                                                    name = locales[name_key].get('message', name)
-                                        except:
-                                            pass
+                                name = self._localization_handler._get_localized_name(manifest, version_path)
                                 
                                 # Безопасно конвертируем все значения в строки
                                 permissions = manifest.get('permissions', [])
-                                if isinstance(permissions, list):
-                                    permissions_str = ', '.join(permissions)
-                                else:
-                                    permissions_str = str(permissions)
+                                permissions_str = self._permissions_formatter._format_permissions(permissions)
                                 
                                 # Формируем запись (все поля как строки)
                                 record = (
@@ -84,10 +120,10 @@ class Parser():
                                     browser_name,
                                     ext_id,
                                     version,
-                                    self._safe_string(name),
-                                    self._safe_string(manifest.get('version', '')),
-                                    self._safe_string(manifest.get('description', '')),
-                                    self._safe_string(manifest.get('author', '')),
+                                    self._string_converter._safe_string(name),
+                                    self._string_converter._safe_string(manifest.get('version', '')),
+                                    self._string_converter._safe_string(manifest.get('description', '')),
+                                    self._string_converter._safe_string(manifest.get('author', '')),
                                     permissions_str,
                                     manifest_path
                                 )
@@ -101,14 +137,15 @@ class Parser():
                 
         return results
 
-    async def Start(self) -> Dict:
-        print("=== EXTENSIONS PARSER ЗАПУЩЕН ===")
-        
-        output_writer = self.__parameters.get('OUTPUTWRITER')
-        
-        if not self.__parameters.get('DBCONNECTION').IsConnected():
-            return {}
-        
+
+class ExtensionsOutputConfigurator:
+    """Класс для настройки вывода данных расширений"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+    
+    def _configure_output(self, output_writer):
+        """Настраивает поля и структуру вывода"""
         # Структура полей для БД
         record_fields = {
             'UserName': 'TEXT',
@@ -137,26 +174,19 @@ class Parser():
             'DataSource': ('Источник данных', 200, 'string', 'Путь к manifest.json')
         }
         
-        HELP_TEXT = """
-Chromium Extensions Parser:
-Расширения браузеров на базе Chromium
-
-Извлекается из папок:
-~/.config/google-chrome/Default/Extensions/
-~/.config/chromium/Default/Extensions/
-
-Данные включают:
-- Названия расширений
-- Идентификаторы и версии
-- Описания и авторов
-- Права доступа
-"""
-        
-        # Настройка вывода
         output_writer.SetFields(fields_description, record_fields)
         output_writer.CreateDatabaseTables()
-        
-        await self.__parameters.get('UIREDRAW')('Поиск браузеров Chromium...', 10)
+
+
+class ExtensionsBrowserFinder:
+    """Класс для поиска браузеров с расширениями"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+    
+    async def _find_browsers_extensions(self, extensions_parser: ExtensionsParser) -> List[Tuple]:
+        """Поиск браузеров и сбор данных расширений"""
+        print("=== EXTENSIONS PARSER ЗАПУЩЕН ===")
         
         # Поиск браузеров
         browsers = [
@@ -183,9 +213,50 @@ Chromium Extensions Parser:
             
             if os.path.exists(extensions_path):
                 self.__parameters.get('LOG').Info('ChromiumExtensions', f'Найден браузер: {browser_name}')
-                records = self._parse_chrome_extensions(extensions_path, browser_name)
+                records = extensions_parser._parse_chrome_extensions(extensions_path, browser_name)
                 all_records.extend(records)
                 print(f"Найдено расширений в {browser_name}: {len(records)}")
+        
+        return all_records
+
+
+class Parser:
+    """Основной класс-координатор для парсинга расширений"""
+    
+    def __init__(self, parameters: dict):  
+        self.__parameters = parameters
+        self._extensions_parser = ExtensionsParser(parameters)
+        self._output_configurator = ExtensionsOutputConfigurator(parameters)
+        self._browser_finder = ExtensionsBrowserFinder(parameters)
+    
+    async def Start(self) -> Dict:
+        output_writer = self.__parameters.get('OUTPUTWRITER')
+        
+        if not self.__parameters.get('DBCONNECTION').IsConnected():
+            return {}
+        
+        HELP_TEXT = """
+Chromium Extensions Parser:
+Расширения браузеров на базе Chromium
+
+Извлекается из папок:
+~/.config/google-chrome/Default/Extensions/
+~/.config/chromium/Default/Extensions/
+
+Данные включают:
+- Названия расширений
+- Идентификаторы и версии
+- Описания и авторов
+- Права доступа
+"""
+        
+        # Настройка вывода
+        self._output_configurator._configure_output(output_writer)
+        
+        await self.__parameters.get('UIREDRAW')('Поиск браузеров Chromium...', 10)
+        
+        # Поиск браузеров и сбор данных расширений
+        all_records = await self._browser_finder._find_browsers_extensions(self._extensions_parser)
         
         # Запись результатов
         await self.__parameters.get('UIREDRAW')('Запись результатов...', 80)

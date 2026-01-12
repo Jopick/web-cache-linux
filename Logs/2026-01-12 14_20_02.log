@@ -1,0 +1,7 @@
+2026-01-12 14:20:02,019___INFO___Interface: Каталог временных файлов воссоздан: Temp
+2026-01-12 14:20:02,027___ERROR___DatabaseInterface.SQLiteDatabaseInterfaceReader.__SetConnection: Ошибка создания подключения к БД SQLite!
+2026-01-12 14:20:02,060___ERROR___DatabaseInterface.SQLiteDatabaseInterfaceReader.__SetConnection: Ошибка создания подключения к БД SQLite!
+2026-01-12 14:20:02,083___INFO___ChromiumCookies: Найден браузер: Chromium
+2026-01-12 14:20:02,110___INFO___ChromiumCookies: Найдено записей в Chromium: 46
+2026-01-12 14:20:02,208___INFO___ChromiumDownloads: Найден браузер: Chromium
+2026-01-12 14:20:02,412___INFO___ChromiumHistory: Найден браузер: Chromium

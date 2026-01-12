@@ -1,0 +1,40 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# Test results and cases
+Cases/
+Logs/
+*.sqlite
+*.db
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+~*
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project specific
+test_data/
+tests/
+check_parser.py
+new_feature.py
+quick_scan.py
+run_all_parsers.py
+working_cookies_parser.py
+chrome_cookies_working.db
+Makefile

@@ -5,30 +5,77 @@
 import os, json
 from typing import Dict, List, Tuple
 from datetime import datetime
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-class Parser():
-    def __init__(self, parameters: dict):  
+from Common.time_utils import convert_chrome_time
+
+
+class BookmarksProcessor:
+    """Обработчик узлов закладок"""
+    
+    def __init__(self, parameters: dict):
         self.__parameters = parameters
         
-    def _convert_chrome_time(self, chrome_timestamp) -> str:
-        """Конвертирует Chromium timestamp в читаемую дату"""
-        if not chrome_timestamp or chrome_timestamp == 0 or chrome_timestamp == '0':
-            return ''
+    def process_bookmark_node(self, node: dict, current_path: str, browser_name: str, data_source: str) -> List[Tuple]:
+        """Обрабатывает узел закладки (рекурсивно)"""
+        results = []
+        
+        if not node:
+            return results
             
-        try:
-            # В закладках время хранится как СТРОКА, конвертируем в int
-            if isinstance(chrome_timestamp, str):
-                chrome_timestamp = int(chrome_timestamp)
+        node_type = node.get('type')
+        
+        if node_type == 'url':
+            # Это закладка - добавляем в результаты
+            try:
+                # Конвертируем время (оно может быть строкой!)
+                date_added = node.get('date_added', 0)
+                date_modified = node.get('date_modified', 0)
+                
+                # Если время строка - конвертируем в int
+                if isinstance(date_added, str):
+                    date_added = int(date_added) if date_added and date_added != '0' else 0
+                if isinstance(date_modified, str):
+                    date_modified = int(date_modified) if date_modified and date_modified != '0' else 0
+                
+                bookmark = (
+                    self.__parameters.get('USERNAME', 'Unknown'),  # временно фиксированное имя
+                    browser_name,
+                    current_path,
+                    node.get('name', 'Без имени'),
+                    node.get('url', ''),
+                    date_added,
+                    convert_chrome_time(date_added),  # ИСПРАВЛЕНО: вызываем функцию напрямую
+                    date_modified,
+                    convert_chrome_time(date_modified),  # ИСПРАВЛЕНО: вызываем функцию напрямую
+                    data_source
+                )
+                results.append(bookmark)
+                print(f"Добавлена закладка: {node.get('name')}")
+                
+            except Exception as e:
+                print(f"Ошибка обработки закладки {node.get('name')}: {e}")
+                
+        elif node_type == 'folder':
+            # Это папка - обрабатываем детей рекурсивно
+            folder_name = node.get('name', 'Без имени')
+            new_path = f"{current_path}/{folder_name}"
             
-            # Chromium время: микросекунды с 1601-01-01
-            unix_timestamp = (chrome_timestamp / 1000000) - 11644473600
-            dt = datetime.fromtimestamp(unix_timestamp)
-            return dt.strftime('%Y.%m.%d %H:%M:%S')
-        except (ValueError, OSError, OverflowError, TypeError) as e:
-            print(f"Ошибка конвертации времени {chrome_timestamp}: {e}")
-            return 'Ошибка конвертации'
+            for child in node.get('children', []):
+                child_results = self.process_bookmark_node(child, new_path, browser_name, data_source)
+                results.extend(child_results)
+                
+        return results
 
-    def _parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
+
+class BookmarksParser:
+    """Парсер файлов закладок"""
+    
+    def __init__(self, bookmarks_processor: BookmarksProcessor):
+        self.bookmarks_processor = bookmarks_processor
+        
+    def parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
         """Парсинг закладок браузера - исправленная версия"""
         results = []
         
@@ -56,7 +103,9 @@ class Parser():
                     }.get(root_name, root_name)
                     
                     # Рекурсивно обрабатываем все вложенные элементы
-                    bookmarks_in_folder = self._process_bookmark_node(root_node, folder_name, browser_name, bookmarks_path)
+                    bookmarks_in_folder = self.bookmarks_processor.process_bookmark_node(
+                        root_node, folder_name, browser_name, bookmarks_path
+                    )
                     results.extend(bookmarks_in_folder)
                     print(f"В папке '{folder_name}' найдено закладок: {len(bookmarks_in_folder)}")
             
@@ -69,56 +118,20 @@ class Parser():
                 
         return results
 
+
+class Parser:
+    def __init__(self, parameters: dict):  
+        self.__parameters = parameters
+        self.bookmarks_processor = BookmarksProcessor(parameters)
+        self.bookmarks_parser = BookmarksParser(self.bookmarks_processor)
+        
+    def _parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
+        """Парсинг закладок браузера - исправленная версия"""
+        return self.bookmarks_parser.parse_chrome_bookmarks(bookmarks_path, browser_name)
+
     def _process_bookmark_node(self, node: dict, current_path: str, browser_name: str, data_source: str) -> List[Tuple]:
         """Обрабатывает узел закладки (рекурсивно)"""
-        results = []
-        
-        if not node:
-            return results
-            
-        node_type = node.get('type')
-        
-        if node_type == 'url':
-            # Это закладка - добавляем в результаты
-            try:
-                # Конвертируем время (оно может быть строкой!)
-                date_added = node.get('date_added', 0)
-                date_modified = node.get('date_modified', 0)
-                
-                # Если время строка - конвертируем в int
-                if isinstance(date_added, str):
-                    date_added = int(date_added) if date_added and date_added != '0' else 0
-                if isinstance(date_modified, str):
-                    date_modified = int(date_modified) if date_modified and date_modified != '0' else 0
-                
-                bookmark = (
-                    'ivan',  # временно фиксированное имя
-                    browser_name,
-                    current_path,
-                    node.get('name', 'Без имени'),
-                    node.get('url', ''),
-                    date_added,
-                    self._convert_chrome_time(date_added),
-                    date_modified,
-                    self._convert_chrome_time(date_modified),
-                    data_source
-                )
-                results.append(bookmark)
-                print(f"Добавлена закладка: {node.get('name')}")
-                
-            except Exception as e:
-                print(f"Ошибка обработки закладки {node.get('name')}: {e}")
-                
-        elif node_type == 'folder':
-            # Это папка - обрабатываем детей рекурсивно
-            folder_name = node.get('name', 'Без имени')
-            new_path = f"{current_path}/{folder_name}"
-            
-            for child in node.get('children', []):
-                child_results = self._process_bookmark_node(child, new_path, browser_name, data_source)
-                results.extend(child_results)
-                
-        return results
+        return self.bookmarks_processor.process_bookmark_node(node, current_path, browser_name, data_source)
 
     async def Start(self) -> Dict:
         print("=== BOOKMARKS PARSER ЗАПУЩЕН ===")

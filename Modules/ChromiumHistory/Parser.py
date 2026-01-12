@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Модуль обработки истории браузера Chromium
 """
@@ -6,11 +5,12 @@ import os, sqlite3, shutil
 from typing import Dict, List, Tuple
 from datetime import datetime
 
-class Parser():
-    def __init__(self, parameters: dict):  
-        self.__parameters = parameters
-        
-    def _convert_chrome_time(self, chrome_timestamp: int) -> str:
+
+class TimeConverter:
+    """Конвертер временных меток Chromium"""
+    
+    @staticmethod
+    def convert_chrome_time(chrome_timestamp: int) -> str:
         """Конвертирует Chromium timestamp в читаемую дату"""
         if not chrome_timestamp or chrome_timestamp == 0:
             return ''
@@ -24,8 +24,16 @@ class Parser():
         except (ValueError, OSError, OverflowError):
             return ''
 
-    def _parse_chrome_history(self, history_path: str, browser_name: str) -> List[Tuple]:
-        """Парсинг истории браузера"""
+
+class HistoryFileParser:
+    """Парсер файлов истории SQLite"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+        self.time_converter = TimeConverter()
+    
+    def parse_history_file(self, history_path: str, browser_name: str) -> List[Tuple]:
+        """Парсинг истории браузера из SQLite файла"""
         results = []
         
         if not os.path.exists(history_path):
@@ -64,7 +72,7 @@ class Parser():
                 url, title, visit_count, typed_count, last_visit_time = row
                 
                 # Конвертируем время
-                visit_date = self._convert_chrome_time(last_visit_time)
+                visit_date = self.time_converter.convert_chrome_time(last_visit_time)
                 
                 record = (
                     self.__parameters.get('USERNAME', 'Unknown'),
@@ -90,6 +98,83 @@ class Parser():
                 os.remove(temp_path)
                 
         return results
+
+
+class BrowserFinder:
+    """Поиск браузеров на системе"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+        
+    def get_browser_paths(self) -> List[Tuple[str, str, str]]:
+        """Возвращает список путей к файлам истории браузеров"""
+        browsers = [
+            ('google-chrome', 'Google Chrome'),
+            ('chromium', 'Chromium'),
+            ('microsoft-edge', 'Microsoft Edge'),
+            ('opera', 'Opera'),
+            ('brave', 'Brave')
+        ]
+        
+        browser_paths = []
+        
+        for browser_folder, browser_name in browsers:
+            history_path = os.path.join(
+                os.path.expanduser('~'),
+                '.config', 
+                browser_folder,
+                'Default',
+                'History'
+            )
+            
+            if os.path.exists(history_path):
+                browser_paths.append((history_path, browser_name, browser_folder))
+                
+        return browser_paths
+
+
+class HistoryProcessor:
+    """Основной процессор обработки истории"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+        self.history_parser = HistoryFileParser(parameters)
+        self.browser_finder = BrowserFinder(parameters)
+        
+    def process_all_browsers(self) -> List[Tuple]:
+        """Обрабатывает историю всех найденных браузеров"""
+        all_records = []
+        browser_paths = self.browser_finder.get_browser_paths()
+        
+        for i, (history_path, browser_name, browser_folder) in enumerate(browser_paths):
+            progress = 10 + (i * 70 // max(len(browser_paths), 1))
+            
+            # Обновляем UI (если нужно)
+            ui_redraw = self.__parameters.get('UIREDRAW')
+            if ui_redraw:
+                import asyncio
+                asyncio.create_task(ui_redraw(f'Проверка {browser_name}...', progress))
+            
+            self.__parameters.get('LOG').Info('ChromiumHistory', f'Найден браузер: {browser_name}')
+            records = self.history_parser.parse_history_file(history_path, browser_name)
+            all_records.extend(records)
+            print(f"Найдено записей в {browser_name}: {len(records)}")
+        
+        return all_records
+
+
+class Parser:
+    def __init__(self, parameters: dict):  
+        self.__parameters = parameters
+        self.history_processor = HistoryProcessor(parameters)
+        
+    def _convert_chrome_time(self, chrome_timestamp: int) -> str:
+        """Конвертирует Chromium timestamp в читаемую дату"""
+        return TimeConverter.convert_chrome_time(chrome_timestamp)
+
+    def _parse_chrome_history(self, history_path: str, browser_name: str) -> List[Tuple]:
+        """Парсинг истории браузера"""
+        return self.history_processor.history_parser.parse_history_file(history_path, browser_name)
 
     async def Start(self) -> Dict:
         storage = self.__parameters.get('STORAGE')
@@ -125,18 +210,7 @@ class Parser():
         }
         
         HELP_TEXT = """
-Chromium History Parser:
-История посещений браузеров на базе Chromium
 
-Извлекается из файлов:
-~/.config/google-chrome/Default/History
-~/.config/chromium/Default/History
-
-Данные включают:
-- URL посещенных страниц
-- Заголовки страниц  
-- Количество посещений
-- Время последнего посещения
 """
         
         # Настройка вывода
@@ -145,34 +219,8 @@ Chromium History Parser:
         
         await self.__parameters.get('UIREDRAW')('Поиск браузеров Chromium...', 10)
         
-        # Поиск браузеров
-        browsers = [
-            ('google-chrome', 'Google Chrome'),
-            ('chromium', 'Chromium'),
-            ('microsoft-edge', 'Microsoft Edge'),
-            ('opera', 'Opera'),
-            ('brave', 'Brave')
-        ]
-        
-        all_records = []
-        
-        for i, (browser_folder, browser_name) in enumerate(browsers):
-            progress = 10 + (i * 70 // len(browsers))
-            await self.__parameters.get('UIREDRAW')(f'Проверка {browser_name}...', progress)
-            
-            history_path = os.path.join(
-                os.path.expanduser('~'),
-                '.config', 
-                browser_folder,
-                'Default',
-                'History'
-            )
-            
-            if os.path.exists(history_path):
-                self.__parameters.get('LOG').Info('ChromiumHistory', f'Найден браузер: {browser_name}')
-                records = self._parse_chrome_history(history_path, browser_name)
-                all_records.extend(records)
-                print(f"Найдено записей в {browser_name}: {len(records)}")
+        # Обработка всех браузеров
+        all_records = self.history_processor.process_all_browsers()
         
         # Запись результатов
         await self.__parameters.get('UIREDRAW')('Запись результатов...', 80)

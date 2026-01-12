@@ -1,6 +1,5 @@
 Документация
 
-Обзор
 
 Фреймворк предназначен для автоматизированного сбора и анализа цифровых артефактов из браузеров на базе Chromium в Linux-системах. Система модульная и позволяет парсить различные типы данных: cookies, историю посещений, закладки, расширения и историю загрузок.
 
@@ -245,16 +244,3 @@ class ExitCode(IntEnum):
 Проблема: "Ошибка формата времени"
 Решение: Проверьте версию браузера - фреймворк поддерживает современный формат Chromium
 
-**Краткая шпаргалка по командам**
-
-Создать структуру проекта
-mkdir -p {Cases,Temp,Logs,Modules,Source}
-
-Базовый запуск
-python Run.py --source_folder ./Source --output_name forensics.sqlite
-
-Анализ Chrome с конкретным именем файла
-python Run.py --source_folder ~/.config/google-chrome --output_name chrome_data.sqlite
-
-Помощь
-python Run.py --help

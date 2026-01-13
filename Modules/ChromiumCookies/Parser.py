@@ -10,7 +10,6 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from Common.time_utils import convert_chrome_time
-# from Interfaces.time import _format_file_size
 
 # Пробуем импортировать browser-cookie3
 try:
@@ -21,10 +20,12 @@ except ImportError:
     BROWSER_COOKIE3_AVAILABLE = False
     print("[INFO] browser-cookie3 не установлен, дешифровка будет ограничена")
 
-class Parser():
-    def __init__(self, parameters: dict):  
+
+class CookieDecryptor:
+    """Дешифратор значений cookie"""
+    
+    def __init__(self, parameters: dict):
         self.__parameters = parameters
-        self.__encryption_keys = {}  # Кэш для ключей дешифровки
         self.__decrypted_cookies_cache = {}  # Кэш для cookies из browser-cookie3
         
     def _get_decrypted_cookies(self, browser_name: str) -> Dict[str, str]:
@@ -75,34 +76,6 @@ class Parser():
         self.__decrypted_cookies_cache[cache_key] = decrypted_cookies
         return decrypted_cookies
     
-    def _get_cookie_value(self, name: str, host_key: str, value: str, 
-                         encrypted_value: bytes, decrypted_cookies: Dict[str, str],
-                         cookies_path: str = None) -> str:
-        """
-        Определяет значение cookie, пытаясь дешифровать если нужно
-        """
-        # Если есть обычное значение, используем его
-        if value:
-            return value
-        
-        # Пробуем найти в расшифрованных cookies из browser-cookie3
-        if name and host_key:
-            lookup_key = f"{host_key}|{name}"
-            if lookup_key in decrypted_cookies:
-                self.__parameters.get('LOG').Info('ChromiumCookies',
-                    f'Найдено расшифрованное значение для {name} через browser-cookie3')
-                return decrypted_cookies[lookup_key]
-        
-        # Если есть зашифрованное значение, но не нашли в browser-cookie3
-        if encrypted_value:
-            # Пробуем нашу дешифровку как запасной вариант
-            decrypted = self._decrypt_cookie_value(encrypted_value, cookies_path)
-            if decrypted and not decrypted.startswith('[зашифровано') and not decrypted.startswith('[бинарные'):
-                return decrypted
-            return decrypted
-        
-        return ""
-    
     def _decrypt_cookie_value(self, encrypted_value: bytes, cookies_path: str = None) -> str:
         """
         Пытается расшифровать значение cookie (запасной метод)
@@ -131,7 +104,47 @@ class Parser():
         except:
             return f"[бинарные данные: {len(encrypted_value)} байт]"
 
-    def _convert_chrome_time(self, chrome_timestamp: int) -> str:
+
+class CookieValueResolver:
+    """Определитель значений cookie"""
+    
+    def __init__(self, cookie_decryptor: CookieDecryptor):
+        self.cookie_decryptor = cookie_decryptor
+        
+    def get_cookie_value(self, name: str, host_key: str, value: str, 
+                         encrypted_value: bytes, decrypted_cookies: Dict[str, str],
+                         cookies_path: str = None) -> str:
+        """
+        Определяет значение cookie, пытаясь дешифровать если нужно
+        """
+        # Если есть обычное значение, используем его
+        if value:
+            return value
+        
+        # Пробуем найти в расшифрованных cookies из browser-cookie3
+        if name and host_key:
+            lookup_key = f"{host_key}|{name}"
+            if lookup_key in decrypted_cookies:
+                self.cookie_decryptor._parameters.get('LOG').Info('ChromiumCookies',
+                    f'Найдено расшифрованное значение для {name} через browser-cookie3')
+                return decrypted_cookies[lookup_key]
+        
+        # Если есть зашифрованное значение, но не нашли в browser-cookie3
+        if encrypted_value:
+            # Пробуем нашу дешифровку как запасной вариант
+            decrypted = self.cookie_decryptor._decrypt_cookie_value(encrypted_value, cookies_path)
+            if decrypted and not decrypted.startswith('[зашифровано') and not decrypted.startswith('[бинарные'):
+                return decrypted
+            return decrypted
+        
+        return ""
+
+
+class TimeConverter:
+    """Конвертер временных меток"""
+    
+    @staticmethod
+    def convert_chrome_time(chrome_timestamp: int) -> str:
         """
         Конвертирует временную метку Chrome в читаемую дату.
         Chrome timestamp = microseconds since 1601-01-01
@@ -153,13 +166,39 @@ class Parser():
             return dt.strftime('%Y.%m.%d %H:%M:%S')
         except Exception as e:
             return f"Ошибка: {str(e)}"
+    
+    @staticmethod
+    def get_cookie_type(is_persistent: int) -> str:
+        """Определяет тип cookie"""
+        return "Сессионный" if not is_persistent else "Постоянный"
+    
+    @staticmethod
+    def get_priority_text(priority: int) -> str:
+        """Возвращает текстовое представление приоритета"""
+        priority_map = {0: "Низкий", 1: "Средний", 2: "Высокий"}
+        return priority_map.get(priority, "Неизвестно")
+    
+    @staticmethod
+    def get_samesite_text(samesite: int) -> str:
+        """Возвращает текстовое представление SameSite"""
+        samesite_map = {-1: "Не задано", 0: "Не задано", 1: "Lax", 2: "Strict", 3: "None"}
+        return samesite_map.get(samesite, "Неизвестно")
 
-    def _parse_chrome_cookies(self, cookies_path: str, browser_name: str) -> List[Tuple]:
+
+class CookiesFileParser:
+    """Парсер файлов cookies SQLite"""
+    
+    def __init__(self, parameters: dict, cookie_value_resolver: CookieValueResolver):
+        self.__parameters = parameters
+        self.cookie_value_resolver = cookie_value_resolver
+        self.time_converter = TimeConverter()
+    
+    def parse_cookies_file(self, cookies_path: str, browser_name: str) -> List[Tuple]:
         """Парсинг cookies браузера"""
         results = []
         
         # Получаем расшифрованные cookies через browser-cookie3
-        decrypted_cookies = self._get_decrypted_cookies(browser_name)
+        decrypted_cookies = self.cookie_value_resolver.cookie_decryptor._get_decrypted_cookies(browser_name)
         
         if not os.path.exists(cookies_path):
             print(f"[DEBUG] Файл не найден: {cookies_path}")
@@ -231,27 +270,21 @@ class Parser():
                     continue
                 
                 # Определяем фактическое значение cookie
-                cookie_value = self._get_cookie_value(
+                cookie_value = self.cookie_value_resolver.get_cookie_value(
                     name, host_key, value, encrypted_value, 
                     decrypted_cookies, cookies_path
                 )
                 
                 # Конвертируем временные метки
-                creation_date = self._convert_chrome_time(creation_utc)
-                expires_date = self._convert_chrome_time(expires_utc)
-                last_access_date = self._convert_chrome_time(last_access_utc)
-                last_update_date = self._convert_chrome_time(last_update_utc)
+                creation_date = self.time_converter.convert_chrome_time(creation_utc)
+                expires_date = self.time_converter.convert_chrome_time(expires_utc)
+                last_access_date = self.time_converter.convert_chrome_time(last_access_utc)
+                last_update_date = self.time_converter.convert_chrome_time(last_update_utc)
                 
-                # Определяем тип cookie
-                cookie_type = "Сессионный" if not is_persistent else "Постоянный"
-                
-                # Определяем приоритет
-                priority_map = {0: "Низкий", 1: "Средний", 2: "Высокий"}
-                priority_text = priority_map.get(priority, "Неизвестно")
-                
-                # Определяем SameSite
-                samesite_map = {-1: "Не задано", 0: "Не задано", 1: "Lax", 2: "Strict", 3: "None"}
-                samesite_text = samesite_map.get(samesite, "Неизвестно")
+                # Определяем тип cookie и другие свойства
+                cookie_type = self.time_converter.get_cookie_type(is_persistent)
+                priority_text = self.time_converter.get_priority_text(priority)
+                samesite_text = self.time_converter.get_samesite_text(samesite)
                 
                 record = (
                     self.__parameters.get('USERNAME', 'Unknown'),
@@ -295,6 +328,75 @@ class Parser():
         
         print(f"[DEBUG] Завершен парсинг, найдено записей: {len(results)}")
         return results
+
+
+class BrowserFinder:
+    """Поиск браузеров на системе"""
+    
+    @staticmethod
+    def get_browser_cookie_paths() -> List[Tuple[str, str, str]]:
+        """Возвращает список путей к файлам cookies браузеров"""
+        browsers = [
+            ('google-chrome', 'Google Chrome'),
+            ('chromium', 'Chromium'),
+            ('microsoft-edge', 'Microsoft Edge'),
+            ('opera', 'Opera'),
+            ('brave', 'Brave')
+        ]
+        
+        browser_paths = []
+        
+        for browser_folder, browser_name in browsers:
+            cookies_path = os.path.join(
+                os.path.expanduser('~'),
+                '.config', 
+                browser_folder,
+                'Default',
+                'Cookies'
+            )
+            
+            if os.path.exists(cookies_path):
+                browser_paths.append((cookies_path, browser_name, browser_folder))
+                
+        return browser_paths
+
+
+class CookiesProcessor:
+    """Основной процессор обработки cookies"""
+    
+    def __init__(self, parameters: dict):
+        self.__parameters = parameters
+        self.cookie_decryptor = CookieDecryptor(parameters)
+        self.cookie_value_resolver = CookieValueResolver(self.cookie_decryptor)
+        self.cookies_file_parser = CookiesFileParser(parameters, self.cookie_value_resolver)
+        self.browser_finder = BrowserFinder()
+        
+    def process_all_browsers(self) -> List[Tuple]:
+        """Обрабатывает cookies всех найденных браузеров"""
+        all_records = []
+        browser_paths = self.browser_finder.get_browser_cookie_paths()
+        
+        for i, (cookies_path, browser_name, browser_folder) in enumerate(browser_paths):
+            self.__parameters.get('LOG').Info('ChromiumCookies', f'Найден браузер: {browser_name}')
+            records = self.cookies_file_parser.parse_cookies_file(cookies_path, browser_name)
+            all_records.extend(records)
+            print(f"[DEBUG] Найдено cookies в {browser_name}: {len(records)}")
+        
+        return all_records
+
+
+class Parser():
+    def __init__(self, parameters: dict):  
+        self.__parameters = parameters
+        self.cookies_processor = CookiesProcessor(parameters)
+        
+    def _convert_chrome_time(self, chrome_timestamp: int) -> str:
+        """Конвертирует Chromium timestamp в читаемую дату"""
+        return TimeConverter.convert_chrome_time(chrome_timestamp)
+
+    def _parse_chrome_cookies(self, cookies_path: str, browser_name: str) -> List[Tuple]:
+        """Парсинг cookies браузера"""
+        return self.cookies_processor.cookies_file_parser.parse_cookies_file(cookies_path, browser_name)
 
     async def Start(self) -> Dict:
         storage = self.__parameters.get('STORAGE')
@@ -387,34 +489,8 @@ Cookies (куки) браузеров на базе Chromium
         
         await self.__parameters.get('UIREDRAW')('Поиск браузеров Chromium...', 10)
         
-        # Поиск браузеров
-        browsers = [
-            ('google-chrome', 'Google Chrome'),
-            ('chromium', 'Chromium'),
-            ('microsoft-edge', 'Microsoft Edge'),
-            ('opera', 'Opera'),
-            ('brave', 'Brave')
-        ]
-        
-        all_records = []
-        
-        for i, (browser_folder, browser_name) in enumerate(browsers):
-            progress = 10 + (i * 70 // len(browsers))
-            await self.__parameters.get('UIREDRAW')(f'Проверка {browser_name}...', progress)
-            
-            cookies_path = os.path.join(
-                os.path.expanduser('~'),
-                '.config', 
-                browser_folder,
-                'Default',
-                'Cookies'
-            )
-            
-            if os.path.exists(cookies_path):
-                self.__parameters.get('LOG').Info('ChromiumCookies', f'Найден браузер: {browser_name}')
-                records = self._parse_chrome_cookies(cookies_path, browser_name)
-                all_records.extend(records)
-                print(f"[DEBUG] Найдено cookies в {browser_name}: {len(records)}")
+        # Обработка всех браузеров
+        all_records = self.cookies_processor.process_all_browsers()
         
         print(f"[DEBUG] Всего найдено записей: {len(all_records)}")
         

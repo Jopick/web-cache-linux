@@ -2,6 +2,7 @@
 """
 Точка входа
 
+
 """
 
 import sys,asyncio

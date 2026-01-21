@@ -14,6 +14,7 @@ from Common.time_utils import (
     get_priority_text, 
     get_samesite_text
 )
+from Common.browser_finder import BrowserFinder
 
 from Common.time_utils import convert_chrome_time
 
@@ -287,38 +288,6 @@ class CookiesFileParser:
         print(f"[DEBUG] Завершен парсинг, найдено записей: {len(results)}")
         return results
 
-
-class BrowserFinder:
-    """Поиск браузеров на системе"""
-    
-    @staticmethod
-    def get_browser_cookie_paths() -> List[Tuple[str, str, str]]:
-        """Возвращает список путей к файлам cookies браузеров"""
-        browsers = [
-            ('google-chrome', 'Google Chrome'),
-            ('chromium', 'Chromium'),
-            ('microsoft-edge', 'Microsoft Edge'),
-            ('opera', 'Opera'),
-            ('brave', 'Brave')
-        ]
-        
-        browser_paths = []
-        
-        for browser_folder, browser_name in browsers:
-            cookies_path = os.path.join(
-                os.path.expanduser('~'),
-                '.config', 
-                browser_folder,
-                'Default',
-                'Cookies'
-            )
-            
-            if os.path.exists(cookies_path):
-                browser_paths.append((cookies_path, browser_name, browser_folder))
-                
-        return browser_paths
-
-
 class CookiesProcessor:
     """Основной процессор обработки cookies"""
     
@@ -327,12 +296,11 @@ class CookiesProcessor:
         self.cookie_decryptor = CookieDecryptor(parameters)
         self.cookie_value_resolver = CookieValueResolver(self.cookie_decryptor)
         self.cookies_file_parser = CookiesFileParser(parameters, self.cookie_value_resolver)
-        self.browser_finder = BrowserFinder()
         
     def process_all_browsers(self) -> List[Tuple]:
         """Обрабатывает cookies всех найденных браузеров"""
         all_records = []
-        browser_paths = self.browser_finder.get_browser_cookie_paths()
+        browser_paths = BrowserFinder.get_cookies_paths()
         
         for i, (cookies_path, browser_name, browser_folder) in enumerate(browser_paths):
             self.__parameters.get('LOG').Info('ChromiumCookies', f'Найден браузер: {browser_name}')

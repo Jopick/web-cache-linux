@@ -10,15 +10,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from Common.time_utils import convert_chrome_time
 
-
-class BookmarksProcessor:
-    """Обработчик узлов закладок"""
-    
-    def __init__(self, parameters: dict):
+class Parser:
+    def __init__(self, parameters: dict):  
         self.__parameters = parameters
         
-    def process_bookmark_node(self, node: dict, current_path: str, browser_name: str, data_source: str) -> List[Tuple]:
-        """Обрабатывает узел закладки (рекурсивно)"""
+    def _process_bookmark_node(self, node: dict, current_path: str, browser_name: str, data_source: str) -> List[Tuple]:
+        """Обрабатывает узел закладки (рекурсивно) - теперь в основном классе"""
         results = []
         
         if not node:
@@ -46,9 +43,9 @@ class BookmarksProcessor:
                     node.get('name', 'Без имени'),
                     node.get('url', ''),
                     date_added,
-                    convert_chrome_time(date_added),  # ИСПРАВЛЕНО: вызываем функцию напрямую
+                    convert_chrome_time(date_added),
                     date_modified,
-                    convert_chrome_time(date_modified),  # ИСПРАВЛЕНО: вызываем функцию напрямую
+                    convert_chrome_time(date_modified),
                     data_source
                 )
                 results.append(bookmark)
@@ -63,20 +60,13 @@ class BookmarksProcessor:
             new_path = f"{current_path}/{folder_name}"
             
             for child in node.get('children', []):
-                child_results = self.process_bookmark_node(child, new_path, browser_name, data_source)
+                child_results = self._process_bookmark_node(child, new_path, browser_name, data_source)
                 results.extend(child_results)
                 
         return results
-
-
-class BookmarksParser:
-    """Парсер файлов закладок"""
-    
-    def __init__(self, bookmarks_processor: BookmarksProcessor):
-        self.bookmarks_processor = bookmarks_processor
         
-    def parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
-        """Парсинг закладок браузера - исправленная версия"""
+    def _parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
+        """Парсинг закладок браузера - теперь в основном классе"""
         results = []
         
         if not os.path.exists(bookmarks_path):
@@ -103,7 +93,7 @@ class BookmarksParser:
                     }.get(root_name, root_name)
                     
                     # Рекурсивно обрабатываем все вложенные элементы
-                    bookmarks_in_folder = self.bookmarks_processor.process_bookmark_node(
+                    bookmarks_in_folder = self._process_bookmark_node(
                         root_node, folder_name, browser_name, bookmarks_path
                     )
                     results.extend(bookmarks_in_folder)
@@ -117,21 +107,6 @@ class BookmarksParser:
             traceback.print_exc()
                 
         return results
-
-
-class Parser:
-    def __init__(self, parameters: dict):  
-        self.__parameters = parameters
-        self.bookmarks_processor = BookmarksProcessor(parameters)
-        self.bookmarks_parser = BookmarksParser(self.bookmarks_processor)
-        
-    def _parse_chrome_bookmarks(self, bookmarks_path: str, browser_name: str) -> List[Tuple]:
-        """Парсинг закладок браузера - исправленная версия"""
-        return self.bookmarks_parser.parse_chrome_bookmarks(bookmarks_path, browser_name)
-
-    def _process_bookmark_node(self, node: dict, current_path: str, browser_name: str, data_source: str) -> List[Tuple]:
-        """Обрабатывает узел закладки (рекурсивно)"""
-        return self.bookmarks_processor.process_bookmark_node(node, current_path, browser_name, data_source)
 
     async def Start(self) -> Dict:
         print("=== BOOKMARKS PARSER ЗАПУЩЕН ===")

@@ -6,6 +6,7 @@ import os, sqlite3, shutil
 from typing import Dict, List, Tuple
 from datetime import datetime
 from Common.time_utils import convert_chrome_time
+from Common.browser_finder import BrowserFinder
 
 class FileSizeFormatter:
     """Класс для форматирования размеров файлов"""
@@ -161,7 +162,28 @@ class DownloadsParser:
                 
         return results
 
-
+    async def find_and_parse_browsers(self) -> List[Tuple]:
+        """Поиск браузеров и сбор данных"""
+        all_records = []
+        
+        # ИСПОЛЬЗУЕМ ОБЩИЙ BrowserFinder
+        browser_paths = BrowserFinder.get_history_paths()
+        
+        for i, (history_path, browser_name, browser_folder) in enumerate(browser_paths):
+            progress = 10 + (i * 70 // max(len(browser_paths), 1))
+            
+            # Обновляем UI прогресса
+            ui_redraw = self.__parameters.get('UIREDRAW')
+            if ui_redraw:
+                import asyncio
+                asyncio.create_task(ui_redraw(f'Проверка {browser_name}...', progress))
+            
+            self.__parameters.get('LOG').Info('ChromiumDownloads', f'Найден браузер: {browser_name}')
+            records = self._parse_chrome_downloads(history_path, browser_name)
+            all_records.extend(records)
+            print(f"Найдено загрузок в {browser_name}: {len(records)}")
+        
+        return all_records
 class OutputConfigurator:
     """Класс для настройки вывода данных"""
     
@@ -220,43 +242,6 @@ class OutputConfigurator:
         output_writer.CreateDatabaseTables()
 
 
-class BrowserFinder:
-    """Класс для поиска браузеров"""
-    
-    def __init__(self, parameters: dict):
-        self.__parameters = parameters
-    
-    async def _find_browsers(self, downloads_parser: DownloadsParser) -> List[Tuple]:
-        """Поиск браузеров и сбор данных"""
-        browsers = [
-            ('google-chrome', 'Google Chrome'),
-            ('chromium', 'Chromium'),
-            ('microsoft-edge', 'Microsoft Edge'),
-            ('opera', 'Opera'),
-            ('brave', 'Brave')
-        ]
-        
-        all_records = []
-        
-        for i, (browser_folder, browser_name) in enumerate(browsers):
-            progress = 10 + (i * 70 // len(browsers))
-            await self.__parameters.get('UIREDRAW')(f'Проверка {browser_name}...', progress)
-            
-            history_path = os.path.join(
-                os.path.expanduser('~'),
-                '.config', 
-                browser_folder,
-                'Default',
-                'History'
-            )
-            
-            if os.path.exists(history_path):
-                self.__parameters.get('LOG').Info('ChromiumDownloads', f'Найден браузер: {browser_name}')
-                records = downloads_parser._parse_chrome_downloads(history_path, browser_name)
-                all_records.extend(records)
-                print(f"Найдено загрузок в {browser_name}: {len(records)}")
-        
-        return all_records
 
 
 class Parser:
@@ -266,7 +251,6 @@ class Parser:
         self.__parameters = parameters
         self._downloads_parser = DownloadsParser(parameters)
         self._output_configurator = OutputConfigurator(parameters)
-        self._browser_finder = BrowserFinder(parameters)
     
     async def Start(self) -> Dict:
         storage = self.__parameters.get('STORAGE')
@@ -298,7 +282,7 @@ Chromium Downloads Parser:
         await self.__parameters.get('UIREDRAW')('Поиск браузеров Chromium...', 10)
         
         # Поиск браузеров и сбор данных
-        all_records = await self._browser_finder._find_browsers(self._downloads_parser)
+        all_records = await self._downloads_parser.find_and_parse_browsers()
         
         # Запись результатов
         await self.__parameters.get('UIREDRAW')('Запись результатов...', 80)

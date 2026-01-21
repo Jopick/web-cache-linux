@@ -5,6 +5,7 @@ import os, sqlite3, shutil
 from typing import Dict, List, Tuple
 from datetime import datetime
 from Common.time_utils import convert_chrome_time
+from Common.browser_finder import BrowserFinder
 
 class HistoryFileParser:
     """Парсер файлов истории SQLite"""
@@ -61,7 +62,7 @@ class HistoryFileParser:
                 
                 # Конвертируем время
                 visit_date = convert_chrome_time(last_visit_time)
-                    
+
                 record = (
                     self.__parameters.get('USERNAME', 'Unknown'),
                     browser_name,
@@ -87,52 +88,17 @@ class HistoryFileParser:
                 
         return results
 
-
-class BrowserFinder:
-    """Поиск браузеров на системе"""
-    
-    def __init__(self, parameters: dict):
-        self.__parameters = parameters
-        
-    def get_browser_paths(self) -> List[Tuple[str, str, str]]:
-        """Возвращает список путей к файлам истории браузеров"""
-        browsers = [
-            ('google-chrome', 'Google Chrome'),
-            ('chromium', 'Chromium'),
-            ('microsoft-edge', 'Microsoft Edge'),
-            ('opera', 'Opera'),
-            ('brave', 'Brave')
-        ]
-        
-        browser_paths = []
-        
-        for browser_folder, browser_name in browsers:
-            history_path = os.path.join(
-                os.path.expanduser('~'),
-                '.config', 
-                browser_folder,
-                'Default',
-                'History'
-            )
-            
-            if os.path.exists(history_path):
-                browser_paths.append((history_path, browser_name, browser_folder))
-                
-        return browser_paths
-
-
 class HistoryProcessor:
     """Основной процессор обработки истории"""
     
     def __init__(self, parameters: dict):
         self.__parameters = parameters
         self.history_parser = HistoryFileParser(parameters)
-        self.browser_finder = BrowserFinder(parameters)
         
     def process_all_browsers(self) -> List[Tuple]:
         """Обрабатывает историю всех найденных браузеров"""
         all_records = []
-        browser_paths = self.browser_finder.get_browser_paths()
+        browser_paths = BrowserFinder.get_history_paths()
         
         for i, (history_path, browser_name, browser_folder) in enumerate(browser_paths):
             progress = 10 + (i * 70 // max(len(browser_paths), 1))

@@ -8,6 +8,12 @@ from typing import Dict, List, Tuple
 from datetime import datetime
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+from Common.time_utils import (
+    convert_chrome_time, 
+    get_cookie_type, 
+    get_priority_text, 
+    get_samesite_text
+)
 
 from Common.time_utils import convert_chrome_time
 
@@ -138,60 +144,12 @@ class CookieValueResolver:
             return decrypted
         
         return ""
-
-
-class TimeConverter:
-    """Конвертер временных меток"""
-    
-    @staticmethod
-    def convert_chrome_time(chrome_timestamp: int) -> str:
-        """
-        Конвертирует временную метку Chrome в читаемую дату.
-        Chrome timestamp = microseconds since 1601-01-01
-        """
-        if not chrome_timestamp or chrome_timestamp == 0:
-            return "Не ограничен"
-        
-        try:
-            from datetime import datetime, timedelta
-            # Конвертируем микросекунды в секунды
-            epoch_start = datetime(1601, 1, 1)
-            delta_microseconds = chrome_timestamp
-            delta_seconds = delta_microseconds / 1000000.0
-            
-            # Получаем datetime объект
-            dt = epoch_start + timedelta(seconds=delta_seconds)
-            
-            # Форматируем дату
-            return dt.strftime('%Y.%m.%d %H:%M:%S')
-        except Exception as e:
-            return f"Ошибка: {str(e)}"
-    
-    @staticmethod
-    def get_cookie_type(is_persistent: int) -> str:
-        """Определяет тип cookie"""
-        return "Сессионный" if not is_persistent else "Постоянный"
-    
-    @staticmethod
-    def get_priority_text(priority: int) -> str:
-        """Возвращает текстовое представление приоритета"""
-        priority_map = {0: "Низкий", 1: "Средний", 2: "Высокий"}
-        return priority_map.get(priority, "Неизвестно")
-    
-    @staticmethod
-    def get_samesite_text(samesite: int) -> str:
-        """Возвращает текстовое представление SameSite"""
-        samesite_map = {-1: "Не задано", 0: "Не задано", 1: "Lax", 2: "Strict", 3: "None"}
-        return samesite_map.get(samesite, "Неизвестно")
-
-
 class CookiesFileParser:
     """Парсер файлов cookies SQLite"""
     
     def __init__(self, parameters: dict, cookie_value_resolver: CookieValueResolver):
         self.__parameters = parameters
         self.cookie_value_resolver = cookie_value_resolver
-        self.time_converter = TimeConverter()
     
     def parse_cookies_file(self, cookies_path: str, browser_name: str) -> List[Tuple]:
         """Парсинг cookies браузера"""
@@ -276,15 +234,15 @@ class CookiesFileParser:
                 )
                 
                 # Конвертируем временные метки
-                creation_date = self.time_converter.convert_chrome_time(creation_utc)
-                expires_date = self.time_converter.convert_chrome_time(expires_utc)
-                last_access_date = self.time_converter.convert_chrome_time(last_access_utc)
-                last_update_date = self.time_converter.convert_chrome_time(last_update_utc)
+                creation_date = convert_chrome_time(creation_utc)
+                expires_date = convert_chrome_time(expires_utc)
+                last_access_date = convert_chrome_time(last_access_utc)
+                last_update_date = convert_chrome_time(last_update_utc)
                 
                 # Определяем тип cookie и другие свойства
-                cookie_type = self.time_converter.get_cookie_type(is_persistent)
-                priority_text = self.time_converter.get_priority_text(priority)
-                samesite_text = self.time_converter.get_samesite_text(samesite)
+                cookie_type = get_cookie_type(is_persistent)
+                priority_text = get_priority_text(priority)
+                samesite_text = get_samesite_text(samesite)
                 
                 record = (
                     self.__parameters.get('USERNAME', 'Unknown'),
@@ -390,10 +348,6 @@ class Parser():
         self.__parameters = parameters
         self.cookies_processor = CookiesProcessor(parameters)
         
-    def _convert_chrome_time(self, chrome_timestamp: int) -> str:
-        """Конвертирует Chromium timestamp в читаемую дату"""
-        return TimeConverter.convert_chrome_time(chrome_timestamp)
-
     def _parse_chrome_cookies(self, cookies_path: str, browser_name: str) -> List[Tuple]:
         """Парсинг cookies браузера"""
         return self.cookies_processor.cookies_file_parser.parse_cookies_file(cookies_path, browser_name)

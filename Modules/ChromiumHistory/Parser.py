@@ -4,33 +4,13 @@
 import os, sqlite3, shutil
 from typing import Dict, List, Tuple
 from datetime import datetime
-
-
-class TimeConverter:
-    """Конвертер временных меток Chromium"""
-    
-    @staticmethod
-    def convert_chrome_time(chrome_timestamp: int) -> str:
-        """Конвертирует Chromium timestamp в читаемую дату"""
-        if not chrome_timestamp or chrome_timestamp == 0:
-            return ''
-            
-        try:
-            # Chromium время: микросекунды с 1601-01-01
-            # Конвертируем в Unix время (секунды с 1970-01-01)
-            unix_timestamp = (chrome_timestamp / 1000000) - 11644473600
-            dt = datetime.fromtimestamp(unix_timestamp)
-            return dt.strftime('%Y.%m.%d %H:%M:%S')
-        except (ValueError, OSError, OverflowError):
-            return ''
-
+from Common.time_utils import convert_chrome_time
 
 class HistoryFileParser:
     """Парсер файлов истории SQLite"""
     
     def __init__(self, parameters: dict):
         self.__parameters = parameters
-        self.time_converter = TimeConverter()
     
     def parse_history_file(self, history_path: str, browser_name: str) -> List[Tuple]:
         """Парсинг истории браузера из SQLite файла"""
@@ -80,8 +60,8 @@ class HistoryFileParser:
                 last_visit_time = int(row[4]) if row[4] is not None else 0
                 
                 # Конвертируем время
-                visit_date = self.time_converter.convert_chrome_time(last_visit_time)
-                
+                visit_date = convert_chrome_time(last_visit_time)
+                    
                 record = (
                     self.__parameters.get('USERNAME', 'Unknown'),
                     browser_name,
@@ -178,7 +158,7 @@ class Parser:
         
     def _convert_chrome_time(self, chrome_timestamp: int) -> str:
         """Конвертирует Chromium timestamp в читаемую дату"""
-        return TimeConverter.convert_chrome_time(chrome_timestamp)
+        return convert_chrome_time.convert_chrome_time(chrome_timestamp)
 
     def _parse_chrome_history(self, history_path: str, browser_name: str) -> List[Tuple]:
         """Парсинг истории браузера"""

@@ -55,7 +55,6 @@ class Parser:
                 print(f"Ошибка обработки закладки {node.get('name')}: {e}")
                 
         elif node_type == 'folder':
-            # Это папка - обрабатываем детей рекурсивно
             folder_name = node.get('name', 'Без имени')
             new_path = f"{current_path}/{folder_name}"
             

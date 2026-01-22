@@ -145,6 +145,7 @@ class Parser:
         
         # Тестовый парсинг
         bookmarks_path = os.path.expanduser('~/.config/google-chrome/Default/Bookmarks')
+        bookmarks_path = os.path.expanduser('~/.config/chromium/Default/Bookmarks')
         
         if os.path.exists(bookmarks_path):
             records = self._parse_chrome_bookmarks(bookmarks_path, 'Google Chrome')
